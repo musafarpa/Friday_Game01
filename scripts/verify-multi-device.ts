@@ -79,3 +79,4 @@ runMultiDeviceVerification().catch((err) => {
   console.error('Multi-device verification failed:', err);
   process.exit(1);
 });
+

@@ -274,3 +274,4 @@ To log into your live Admin Dashboard at `http://localhost:3000/admin/login` and
 4. Log into `/admin/login` with:
    - **Email:** `admin@fridayfun.com`
    - **Password:** `Password123!QA`
+
