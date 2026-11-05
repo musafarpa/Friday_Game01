@@ -124,3 +124,4 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_... (or your anon key)
 1. In the Supabase Dashboard, go to **Authentication** $\rightarrow$ **Users** $\rightarrow$ **Add User** (Create User with your admin email and password, e.g. `admin@fridayfun.com`).
 2. Go back to **SQL Editor**, open [`supabase/admin_provision.sql`](file:///c:/MPA/Friday/supabase/admin_provision.sql), confirm your email address, and click **Run**.
 3. You can now log in at `/admin/login` using your real Supabase account!
+
