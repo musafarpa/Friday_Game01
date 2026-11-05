@@ -23,6 +23,7 @@ import {
   Pause,
   XCircle,
   Share2,
+  Database,
 } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { Badge } from '../components/Badge';
@@ -30,6 +31,7 @@ import { PlayerAvatar } from '../components/PlayerAvatar';
 import { WhatsAppButton } from '../components/WhatsAppButton';
 import { CopyButton } from '../components/CopyButton';
 import { gameService } from '../services/gameService';
+import { isSupabaseConfigured, verifySupabaseConnection, supabaseUrl } from '../lib/supabase';
 import {
   Game,
   GameStatus,
@@ -116,6 +118,18 @@ export const AdminDashboard: React.FC = () => {
 
   // Action status message
   const [statusBanner, setStatusBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Live Supabase Backend Ping status
+  const [dbStatus, setDbStatus] = useState<{
+    testing: boolean;
+    result?: { connected: boolean; latencyMs?: number; error?: string; projectUrl?: string };
+  }>({ testing: false });
+
+  const testDbConnection = async () => {
+    setDbStatus({ testing: true });
+    const res = await verifySupabaseConnection();
+    setDbStatus({ testing: false, result: res });
+  };
 
   // Verify Admin Auth on Mount
   useEffect(() => {
@@ -326,6 +340,20 @@ export const AdminDashboard: React.FC = () => {
     }
     setStatusBanner({ type: 'success', message: `Game status changed to ${status.toUpperCase()}.` });
     setTimeout(() => setStatusBanner(null), 3000);
+  };
+
+  // Delete Game Room Handler
+  const handleDeleteGame = async (gameId: string, gameName: string) => {
+    if (confirm(`Permanently delete "${gameName}"? All participants, challenges, and answers will be removed.`)) {
+      try {
+        await gameService.deleteGame(gameId);
+        setStatusBanner({ type: 'success', message: `Game room "${gameName}" deleted successfully.` });
+        setTimeout(() => setStatusBanner(null), 3000);
+        refreshAllData();
+      } catch (err: any) {
+        setStatusBanner({ type: 'error', message: err.message || 'Failed to delete game room.' });
+      }
+    }
   };
 
   // Reveal Answers Handler
@@ -581,6 +609,53 @@ export const AdminDashboard: React.FC = () => {
         ========================================================================= */}
         {activeTab === 'overview' && (
           <div className="space-y-8 animate-in fade-in-50">
+            {/* Live Supabase Backend Status Card */}
+            <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+              isSupabaseConfigured
+                ? 'bg-emerald-950/20 border-emerald-500/30'
+                : 'bg-amber-950/20 border-amber-500/30'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-xl ${isSupabaseConfigured ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-white">
+                      {isSupabaseConfigured ? 'Supabase Cloud Backend' : 'Offline Local Demo Engine'}
+                    </span>
+                    <Badge variant={isSupabaseConfigured ? 'success' : 'warning'} size="sm">
+                      {isSupabaseConfigured ? 'CONFIGURED' : 'LOCAL DEMO'}
+                    </Badge>
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    {isSupabaseConfigured
+                      ? `Target Project: ${supabaseUrl}`
+                      : 'Operating via browser localStorage. Configure VITE_SUPABASE_PUBLISHABLE_KEY in .env.local to link live Supabase.'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {dbStatus.result && (
+                  <span className={`text-xs font-semibold ${dbStatus.result.connected ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {dbStatus.result.connected
+                      ? `🟢 Live Connected (${dbStatus.result.latencyMs}ms)`
+                      : `🔴 Error: ${dbStatus.result.error}`}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={testDbConnection}
+                  disabled={dbStatus.testing}
+                  className="px-3.5 py-2 rounded-xl bg-background-card border border-background-border text-xs font-bold hover:bg-background-hover text-white flex items-center gap-2 min-h-[40px] transition-colors"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${dbStatus.testing ? 'animate-spin' : ''}`} />
+                  <span>{dbStatus.testing ? 'Testing...' : 'Test Connection'}</span>
+                </button>
+              </div>
+            </div>
+
             {/* Stat Cards Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               <div className="p-5 rounded-2xl bg-background-card border border-background-border">
@@ -870,6 +945,15 @@ export const AdminDashboard: React.FC = () => {
                         Cancel
                       </button>
                     )}
+
+                    <button
+                      onClick={() => handleDeleteGame(g.id, g.name)}
+                      className="px-3 py-1.5 rounded-lg bg-red-950/30 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-xs font-bold inline-flex items-center gap-1"
+                      title="Permanently delete room and cascaded data"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Room</span>
+                    </button>
 
                     {selectedGame?.id !== g.id && (
                       <button

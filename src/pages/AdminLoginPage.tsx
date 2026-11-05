@@ -10,7 +10,23 @@ export const AdminLoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [resetMsg, setResetMsg] = useState('');
   const navigate = useNavigate();
+
+  const handleResetPassword = async () => {
+    if (!email.trim()) {
+      setErrorMsg('Please enter your email to request a password reset.');
+      return;
+    }
+    setErrorMsg('');
+    setResetMsg('');
+    const res = await gameService.resetAdminPassword(email.trim());
+    if (res.success) {
+      setResetMsg(`Password reset instructions sent to ${email.trim()}. Check your inbox.`);
+    } else {
+      setErrorMsg(res.error || 'Failed to send password reset email.');
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,6 +100,13 @@ export const AdminLoginPage: React.FC = () => {
               </div>
             )}
 
+            {resetMsg && (
+              <div className="mb-6 p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+                <span>{resetMsg}</span>
+              </div>
+            )}
+
             <form onSubmit={handleLogin} className="space-y-5">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
@@ -109,9 +132,13 @@ export const AdminLoginPage: React.FC = () => {
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
                     Password
                   </label>
-                  <span className="text-[11px] text-slate-500">
-                    Protected route
-                  </span>
+                  <button
+                    type="button"
+                    onClick={handleResetPassword}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold"
+                  >
+                    Forgot password?
+                  </button>
                 </div>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">

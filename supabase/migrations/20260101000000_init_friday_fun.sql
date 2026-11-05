@@ -1,5 +1,7 @@
 -- ==============================================================================
 -- FRIDAY FUN GAME 2026 - COMPLETE PRODUCTION SCHEMA & RLS POLICIES
+-- Target Project: fchqdplgkxsdhcyjqqvz.supabase.co
+-- Idempotent, safe incremental execution for Supabase SQL Editor / CLI
 -- ==============================================================================
 
 -- Enable pgcrypto for UUID and cryptographic hashing
@@ -160,7 +162,7 @@ create index if not exists idx_answers_participant on public.answers(participant
 create index if not exists idx_scores_game on public.scores(game_id);
 
 -- ==============================================================================
--- SEED DEFAULT TOPICS
+-- SEED DEFAULT TOPICS (Safe upsert)
 -- ==============================================================================
 insert into public.topics (name, description, icon, is_active) values
 ('Politics & Government', 'Elections, Indian Constitution, ministers, public policies, and democratic institutions.', 'Landmark', true),
@@ -232,7 +234,7 @@ begin
 end;
 $$;
 
--- RPC: Get challenge for participant (HIDES correct_option unless revealed!)
+-- RPC: Get challenge for participant (STRICT ZERO-LEAK: HIDES correct_option unless revealed!)
 create or replace function public.get_challenge_by_token(p_token_hash text)
 returns jsonb language plpgsql security definer as $$
 declare
@@ -308,6 +310,103 @@ begin
             'submitted_at', v_answer.submitted_at,
             'is_correct', case when v_is_revealed then v_answer.is_correct else null end
         ) else null end
+    );
+end;
+$$;
+
+-- RPC: Create challenge assignment and question atomically
+create or replace function public.create_challenge_assignment(
+    p_game_id uuid,
+    p_round_id uuid,
+    p_sender_id uuid,
+    p_receiver_id uuid,
+    p_topic_id uuid,
+    p_challenge_token_hash text,
+    p_topic_category text,
+    p_question_text text,
+    p_option_a text,
+    p_option_b text,
+    p_option_c text,
+    p_option_d text,
+    p_correct_option text,
+    p_explanation text,
+    p_difficulty text
+)
+returns jsonb language plpgsql security definer as $$
+declare
+    v_assignment_id uuid;
+    v_question_id uuid;
+begin
+    if p_sender_id = p_receiver_id then
+        raise exception 'Self-selection is not permitted.';
+    end if;
+
+    -- Insert assignment
+    insert into public.assignments (
+        game_id,
+        round_id,
+        sender_id,
+        receiver_id,
+        topic_id,
+        challenge_token_hash,
+        status
+    ) values (
+        p_game_id,
+        p_round_id,
+        p_sender_id,
+        p_receiver_id,
+        p_topic_id,
+        p_challenge_token_hash,
+        'pending'
+    ) returning id into v_assignment_id;
+
+    -- Insert question
+    insert into public.questions (
+        assignment_id,
+        topic_category,
+        question_text,
+        option_a,
+        option_b,
+        option_c,
+        option_d,
+        correct_option,
+        explanation,
+        difficulty
+    ) values (
+        v_assignment_id,
+        p_topic_category,
+        p_question_text,
+        p_option_a,
+        p_option_b,
+        p_option_c,
+        p_option_d,
+        p_correct_option,
+        p_explanation,
+        coalesce(p_difficulty, 'medium')
+    ) returning id into v_question_id;
+
+    -- Update sender status
+    update public.participants
+    set status = 'selected'
+    where id = p_sender_id;
+
+    -- Record event
+    insert into public.game_events (game_id, actor_id, event_type, metadata)
+    values (
+        p_game_id,
+        p_sender_id,
+        'challenge_created',
+        jsonb_build_object(
+            'assignment_id', v_assignment_id,
+            'receiver_id', p_receiver_id,
+            'topic_id', p_topic_id
+        )
+    );
+
+    return jsonb_build_object(
+        'success', true,
+        'assignment_id', v_assignment_id,
+        'question_id', v_question_id
     );
 end;
 $$;
@@ -418,7 +517,6 @@ begin
         select 1 from public.assignments
         where round_id = v_assignment.round_id and status != 'submitted'
     ) then
-        -- All submitted! Update round or game event
         insert into public.game_events (game_id, event_type, metadata)
         values (v_assignment.game_id, 'all_submissions_received', jsonb_build_object('round_id', v_assignment.round_id));
     end if;
@@ -464,8 +562,43 @@ begin
 end;
 $$;
 
+-- RPC: Delete game room and all cascaded data
+create or replace function public.delete_game_room(p_game_id uuid)
+returns jsonb language plpgsql security definer as $$
+begin
+    if not public.is_admin() and auth.role() != 'service_role' then
+        raise exception 'Unauthorized: Admin privileges required to delete a game room.';
+    end if;
+
+    delete from public.games where id = p_game_id;
+    return jsonb_build_object('success', true, 'deleted_game_id', p_game_id);
+end;
+$$;
+
+-- RPC: Automated temporary game cleanup (retains completed games for 24h, removes older)
+create or replace function public.cleanup_completed_games()
+returns jsonb language plpgsql security definer as $$
+declare
+    v_count int;
+begin
+    if not public.is_admin() and auth.role() != 'service_role' then
+        raise exception 'Unauthorized: Admin privileges required.';
+    end if;
+
+    with deleted as (
+        delete from public.games
+        where status = 'completed'
+          and updated_at < now() - interval '24 hours'
+        returning id
+    )
+    select count(*) into v_count from deleted;
+
+    return jsonb_build_object('success', true, 'cleaned_count', v_count);
+end;
+$$;
+
 -- ==============================================================================
--- ROW LEVEL SECURITY (RLS) POLICIES
+-- ROW LEVEL SECURITY (RLS) POLICIES (Idempotent safe setup)
 -- ==============================================================================
 
 alter table public.admins enable row level security;
@@ -481,59 +614,97 @@ alter table public.scores enable row level security;
 alter table public.game_events enable row level security;
 
 -- Admins table:
+drop policy if exists "Admins read own row" on public.admins;
+drop policy if exists "Admins can view admin list" on public.admins;
 create policy "Admins read own row" on public.admins for select using (user_id = auth.uid());
 create policy "Admins can view admin list" on public.admins for select using (public.is_admin());
 
 -- Games table:
+drop policy if exists "Public can read games by ID" on public.games;
+drop policy if exists "Admins full access to games" on public.games;
 create policy "Public can read games by ID" on public.games for select using (true);
 create policy "Admins full access to games" on public.games for all using (public.is_admin());
 
 -- Participants table:
+drop policy if exists "Anyone can read participants of a game" on public.participants;
+drop policy if exists "Admins full access to participants" on public.participants;
 create policy "Anyone can read participants of a game" on public.participants for select using (true);
 create policy "Admins full access to participants" on public.participants for all using (public.is_admin());
 
 -- Topics table:
+drop policy if exists "Public can read active topics" on public.topics;
+drop policy if exists "Admins full access to topics" on public.topics;
 create policy "Public can read active topics" on public.topics for select using (true);
 create policy "Admins full access to topics" on public.topics for all using (public.is_admin());
 
 -- Game topics:
+drop policy if exists "Public can read game topics" on public.game_topics;
+drop policy if exists "Admins manage game topics" on public.game_topics;
 create policy "Public can read game topics" on public.game_topics for select using (true);
 create policy "Admins manage game topics" on public.game_topics for all using (public.is_admin());
 
 -- Game rounds:
+drop policy if exists "Public can read game rounds" on public.game_rounds;
+drop policy if exists "Admins manage game rounds" on public.game_rounds;
 create policy "Public can read game rounds" on public.game_rounds for select using (true);
 create policy "Admins manage game rounds" on public.game_rounds for all using (public.is_admin());
 
 -- Assignments:
+drop policy if exists "Public read assignments" on public.assignments;
+drop policy if exists "Public insert assignment" on public.assignments;
+drop policy if exists "Admins manage assignments" on public.assignments;
 create policy "Public read assignments" on public.assignments for select using (true);
 create policy "Public insert assignment" on public.assignments for insert with check (true);
 create policy "Admins manage assignments" on public.assignments for all using (public.is_admin());
 
 -- Questions:
--- Questions contain correct_option! Only admins can read questions directly from the table.
+-- Only admins can read questions directly from the table.
 -- Participants must read questions via the secure get_challenge_by_token RPC!
+drop policy if exists "Admins full access to questions" on public.questions;
+drop policy if exists "Public insert questions" on public.questions;
 create policy "Admins full access to questions" on public.questions for all using (public.is_admin());
-create policy "Service role insert questions" on public.questions for insert with check (true);
+create policy "Public insert questions" on public.questions for insert with check (true);
 
 -- Answers:
+drop policy if exists "Admins full access to answers" on public.answers;
 create policy "Admins full access to answers" on public.answers for all using (public.is_admin());
 
 -- Scores:
+drop policy if exists "Public read scores" on public.scores;
+drop policy if exists "Admins manage scores" on public.scores;
 create policy "Public read scores" on public.scores for select using (true);
 create policy "Admins manage scores" on public.scores for all using (public.is_admin());
 
 -- Game events:
+drop policy if exists "Public read game events" on public.game_events;
+drop policy if exists "Admins insert game events" on public.game_events;
 create policy "Public read game events" on public.game_events for select using (true);
 create policy "Admins insert game events" on public.game_events for all using (public.is_admin());
 
 -- ==============================================================================
--- ENABLE SUPABASE REALTIME REPLICATION
+-- ENABLE SUPABASE REALTIME REPLICATION (Safe idempotent addition)
 -- ==============================================================================
-alter publication supabase_realtime add table public.games;
-alter publication supabase_realtime add table public.participants;
-alter publication supabase_realtime add table public.game_rounds;
-alter publication supabase_realtime add table public.assignments;
-alter publication supabase_realtime add table public.answers;
-alter publication supabase_realtime add table public.scores;
-alter publication supabase_realtime add table public.game_events;
-
+do $$
+begin
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'games') then
+        alter publication supabase_realtime add table public.games;
+    end if;
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'participants') then
+        alter publication supabase_realtime add table public.participants;
+    end if;
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'game_rounds') then
+        alter publication supabase_realtime add table public.game_rounds;
+    end if;
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'assignments') then
+        alter publication supabase_realtime add table public.assignments;
+    end if;
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'answers') then
+        alter publication supabase_realtime add table public.answers;
+    end if;
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'scores') then
+        alter publication supabase_realtime add table public.scores;
+    end if;
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'game_events') then
+        alter publication supabase_realtime add table public.game_events;
+    end if;
+end $$;

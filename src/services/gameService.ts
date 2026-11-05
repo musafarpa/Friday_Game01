@@ -151,11 +151,15 @@ export const gameService = {
     }
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return false;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('admins')
       .select('id')
       .eq('user_id', user.id)
       .maybeSingle();
+    if (error) {
+      console.error('Admin verification check error:', error);
+      return false;
+    }
     return Boolean(data);
   },
 
@@ -177,13 +181,28 @@ export const gameService = {
       return { success: false, error: 'Invalid password. Password must be at least 6 characters.' };
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
       password: pass,
     });
 
-    if (error) {
-      return { success: false, error: error.message };
+    if (authError) {
+      return { success: false, error: authError.message };
+    }
+
+    // Role verification: ensure user exists in public.admins
+    const { data: adminRecord } = await supabase
+      .from('admins')
+      .select('id')
+      .eq('user_id', authData.user.id)
+      .maybeSingle();
+
+    if (!adminRecord) {
+      await supabase.auth.signOut();
+      return {
+        success: false,
+        error: 'Access denied. Your account is authenticated, but not registered with Admin privileges in public.admins.',
+      };
     }
 
     return { success: true };
@@ -196,6 +215,19 @@ export const gameService = {
     setLocal('is_admin_session', false);
   },
 
+  async resetAdminPassword(email: string): Promise<{ success: boolean; error?: string }> {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      return { success: false, error: 'Email cannot be empty.' };
+    }
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    }
+    return { success: true };
+  },
+
   // --- Games ---
   async getGames(): Promise<Game[]> {
     if (isSupabaseConfigured) {
@@ -203,7 +235,10 @@ export const gameService = {
         .from('games')
         .select('*')
         .order('created_at', { ascending: false });
-      if (!error && data) return data as Game[];
+      if (error) {
+        throw new Error(`Failed to load games from Supabase: ${error.message}`);
+      }
+      return (data || []) as Game[];
     }
     return getLocal<Game[]>('games', []);
   },
@@ -215,7 +250,10 @@ export const gameService = {
         .select('*')
         .eq('id', gameId)
         .maybeSingle();
-      if (!error && data) return data as Game;
+      if (error) {
+        throw new Error(`Failed to load game ${gameId} from Supabase: ${error.message}`);
+      }
+      return (data || null) as Game | null;
     }
     const games = getLocal<Game[]>('games', []);
     return games.find((g) => g.id === gameId) || null;
@@ -264,15 +302,20 @@ export const gameService = {
         .select()
         .single();
 
-      if (!error && newGame) {
-        // Create initial Round 1
-        await supabase.from('game_rounds').insert({
-          game_id: newGame.id,
-          round_number: 1,
-          status: 'active',
-        });
-        return newGame as Game;
+      if (error) {
+        throw new Error(`Failed to create game in Supabase: ${error.message}`);
       }
+
+      // Create initial Round 1
+      const { error: roundError } = await supabase.from('game_rounds').insert({
+        game_id: newGame.id,
+        round_number: 1,
+        status: 'active',
+      });
+      if (roundError) {
+        console.error('Initial round creation error:', roundError);
+      }
+      return newGame as Game;
     }
 
     // Local Mode
@@ -334,7 +377,10 @@ export const gameService = {
         .select()
         .single();
 
-      if (!error && data) return data as Game;
+      if (error) {
+        throw new Error(`Failed to update game in Supabase: ${error.message}`);
+      }
+      return data as Game;
     }
 
     const games = getLocal<Game[]>('games', []);
@@ -349,10 +395,13 @@ export const gameService = {
 
   async updateGameStatus(gameId: string, status: GameStatus): Promise<void> {
     if (isSupabaseConfigured) {
-      await supabase
+      const { error } = await supabase
         .from('games')
         .update({ status, updated_at: new Date().toISOString() })
         .eq('id', gameId);
+      if (error) {
+        throw new Error(`Failed to update game status in Supabase: ${error.message}`);
+      }
       return;
     }
 
@@ -365,15 +414,46 @@ export const gameService = {
     }
   },
 
+  async deleteGame(gameId: string): Promise<void> {
+    if (isSupabaseConfigured) {
+      // Use RPC delete_game_room if present, otherwise direct delete
+      const { error } = await supabase.rpc('delete_game_room', { p_game_id: gameId });
+      if (error) {
+        const { error: directError } = await supabase.from('games').delete().eq('id', gameId);
+        if (directError) {
+          throw new Error(`Failed to delete game room from Supabase: ${directError.message}`);
+        }
+      }
+      return;
+    }
+    let games = getLocal<Game[]>('games', []);
+    games = games.filter((g) => g.id !== gameId);
+    setLocal('games', games);
+  },
+
+  async cleanupCompletedGames(): Promise<{ cleaned_count: number }> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.rpc('cleanup_completed_games');
+      if (error) {
+        throw new Error(`Failed to execute completed game cleanup: ${error.message}`);
+      }
+      return data || { cleaned_count: 0 };
+    }
+    return { cleaned_count: 0 };
+  },
+
   // --- Topics ---
   async getTopics(): Promise<Topic[]> {
     if (isSupabaseConfigured) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('topics')
         .select('*')
         .eq('is_active', true)
         .order('name');
-      if (data && data.length > 0) return data as Topic[];
+      if (error) {
+        throw new Error(`Failed to load topics from Supabase: ${error.message}`);
+      }
+      return (data || []) as Topic[];
     }
     let local = getLocal<Topic[]>('topics', []);
     if (local.length === 0) {
@@ -385,8 +465,11 @@ export const gameService = {
 
   async getAllTopics(): Promise<Topic[]> {
     if (isSupabaseConfigured) {
-      const { data } = await supabase.from('topics').select('*').order('name');
-      if (data && data.length > 0) return data as Topic[];
+      const { data, error } = await supabase.from('topics').select('*').order('name');
+      if (error) {
+        throw new Error(`Failed to load all topics from Supabase: ${error.message}`);
+      }
+      return (data || []) as Topic[];
     }
     let local = getLocal<Topic[]>('topics', []);
     if (local.length === 0) {
@@ -398,7 +481,10 @@ export const gameService = {
 
   async toggleTopic(topicId: string, isActive: boolean): Promise<void> {
     if (isSupabaseConfigured) {
-      await supabase.from('topics').update({ is_active: isActive }).eq('id', topicId);
+      const { error } = await supabase.from('topics').update({ is_active: isActive }).eq('id', topicId);
+      if (error) {
+        throw new Error(`Failed to toggle topic in Supabase: ${error.message}`);
+      }
       return;
     }
     const topics = getLocal<Topic[]>('topics', []);
@@ -426,7 +512,10 @@ export const gameService = {
         .insert({ name: cleanName, description: description?.trim() || '', icon, is_active: true })
         .select()
         .single();
-      if (!error && data) return data as Topic;
+      if (error) {
+        throw new Error(`Failed to add topic in Supabase: ${error.message}`);
+      }
+      return data as Topic;
     }
     const topics = getLocal<Topic[]>('topics', []);
     const newTopic: Topic = {
@@ -455,7 +544,10 @@ export const gameService = {
         .eq('id', topicId)
         .select()
         .single();
-      if (!error && data) return data as Topic;
+      if (error) {
+        throw new Error(`Failed to update topic in Supabase: ${error.message}`);
+      }
+      return data as Topic;
     }
 
     const topics = getLocal<Topic[]>('topics', []);
@@ -471,7 +563,10 @@ export const gameService = {
 
   async deleteTopic(topicId: string): Promise<void> {
     if (isSupabaseConfigured) {
-      await supabase.from('topics').delete().eq('id', topicId);
+      const { error } = await supabase.from('topics').delete().eq('id', topicId);
+      if (error) {
+        throw new Error(`Failed to delete topic in Supabase: ${error.message}`);
+      }
       return;
     }
     let topics = getLocal<Topic[]>('topics', []);
@@ -482,18 +577,19 @@ export const gameService = {
   // --- Participants ---
   async getParticipants(gameId: string): Promise<Participant[]> {
     if (isSupabaseConfigured) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('participants')
         .select('*')
         .eq('game_id', gameId)
         .order('player_code', { ascending: true });
-      if (data) {
-        const tokenCache = getLocal<Record<string, string>>('token_cache', {});
-        return data.map((p) => ({
-          ...p,
-          raw_invitation_token: tokenCache[p.id] || p.invitation_token_hash,
-        })) as Participant[];
+      if (error) {
+        throw new Error(`Failed to fetch participants from Supabase: ${error.message}`);
       }
+      const tokenCache = getLocal<Record<string, string>>('token_cache', {});
+      return (data || []).map((p) => ({
+        ...p,
+        raw_invitation_token: tokenCache[p.id] || p.invitation_token_hash,
+      })) as Participant[];
     }
     const list = getLocal<Participant[]>('participants', []);
     return list.filter((p) => p.game_id === gameId);
@@ -581,6 +677,24 @@ export const gameService = {
     participantId: string,
     updates: { displayName?: string; playerCode?: string; emailOrContact?: string }
   ): Promise<Participant | null> {
+    if (isSupabaseConfigured) {
+      const payload: any = {};
+      if (updates.displayName) payload.display_name = updates.displayName.trim();
+      if (updates.playerCode) payload.player_code = updates.playerCode.trim().toUpperCase();
+      if (updates.emailOrContact !== undefined) payload.email_or_contact = updates.emailOrContact.trim();
+
+      const { data, error } = await supabase
+        .from('participants')
+        .update(payload)
+        .eq('id', participantId)
+        .select()
+        .single();
+      if (error) {
+        throw new Error(`Failed to update participant in Supabase: ${error.message}`);
+      }
+      return data as Participant;
+    }
+
     const participants = getLocal<Participant[]>('participants', []);
     const target = participants.find((p) => p.id === participantId);
     if (!target) return null;
@@ -589,27 +703,16 @@ export const gameService = {
     if (updates.playerCode) target.player_code = updates.playerCode.trim().toUpperCase();
     if (updates.emailOrContact !== undefined) target.email_or_contact = updates.emailOrContact.trim();
 
-    if (isSupabaseConfigured) {
-      const { data } = await supabase
-        .from('participants')
-        .update({
-          display_name: target.display_name,
-          player_code: target.player_code,
-          email_or_contact: target.email_or_contact,
-        })
-        .eq('id', participantId)
-        .select()
-        .single();
-      if (data) return data as Participant;
-    }
-
     setLocal('participants', participants);
     return target;
   },
 
   async removeParticipant(participantId: string): Promise<void> {
     if (isSupabaseConfigured) {
-      await supabase.from('participants').delete().eq('id', participantId);
+      const { error } = await supabase.from('participants').delete().eq('id', participantId);
+      if (error) {
+        throw new Error(`Failed to remove participant from Supabase: ${error.message}`);
+      }
       return;
     }
     let participants = getLocal<Participant[]>('participants', []);
@@ -620,14 +723,17 @@ export const gameService = {
   // --- Rounds ---
   async getActiveRound(gameId: string): Promise<GameRound | null> {
     if (isSupabaseConfigured) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('game_rounds')
         .select('*')
         .eq('game_id', gameId)
         .order('round_number', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (data) return data as GameRound;
+      if (error) {
+        throw new Error(`Failed to fetch active round from Supabase: ${error.message}`);
+      }
+      return (data || null) as GameRound | null;
     }
     const rounds = getLocal<GameRound[]>('rounds', []);
     return rounds.find((r) => r.game_id === gameId) || null;
@@ -635,10 +741,13 @@ export const gameService = {
 
   async closeRoundManually(roundId: string, gameId: string): Promise<void> {
     if (isSupabaseConfigured) {
-      await supabase
+      const { error } = await supabase
         .from('game_rounds')
         .update({ status: 'closed' })
         .eq('id', roundId);
+      if (error) {
+        throw new Error(`Failed to close round in Supabase: ${error.message}`);
+      }
       return;
     }
     const rounds = getLocal<GameRound[]>('rounds', []);
@@ -673,7 +782,11 @@ export const gameService = {
         p_token_hash: tokenHash,
       });
 
-      if (!error && data && data.participant) {
+      if (error) {
+        throw new Error(`Invitation lookup error from Supabase: ${error.message}`);
+      }
+
+      if (data && data.participant) {
         const incoming = await this.getIncomingChallenges(data.participant.id, gameId);
         return {
           participant: data.participant as Participant,
@@ -683,6 +796,7 @@ export const gameService = {
           incomingChallenges: incoming,
         };
       }
+      return null;
     }
 
     // Local mode verification: match either hash or raw token
@@ -758,7 +872,48 @@ export const gameService = {
     const challengeTokenHash = await hashToken(rawChallengeToken);
 
     if (isSupabaseConfigured) {
-      // Insert Assignment
+      // Try atomic secure RPC first
+      const { data: rpcData, error: rpcError } = await supabase.rpc('create_challenge_assignment', {
+        p_game_id: gameId,
+        p_round_id: roundId,
+        p_sender_id: senderId,
+        p_receiver_id: receiverId,
+        p_topic_id: topicId,
+        p_challenge_token_hash: challengeTokenHash,
+        p_topic_category: topicName,
+        p_question_text: generatedQ.question,
+        p_option_a: generatedQ.option_a,
+        p_option_b: generatedQ.option_b,
+        p_option_c: generatedQ.option_c,
+        p_option_d: generatedQ.option_d,
+        p_correct_option: generatedQ.correct_option,
+        p_explanation: generatedQ.explanation,
+        p_difficulty: generatedQ.difficulty || difficulty,
+      });
+
+      if (!rpcError && rpcData?.assignment_id) {
+        const challengeCache = getLocal<Record<string, string>>('challenge_token_cache', {});
+        challengeCache[rpcData.assignment_id] = rawChallengeToken;
+        setLocal('challenge_token_cache', challengeCache);
+
+        return {
+          assignment: {
+            id: rpcData.assignment_id,
+            game_id: gameId,
+            round_id: roundId,
+            sender_id: senderId,
+            receiver_id: receiverId,
+            topic_id: topicId,
+            challenge_token_hash: challengeTokenHash,
+            raw_challenge_token: rawChallengeToken,
+            status: 'pending',
+            created_at: new Date().toISOString(),
+          } as Assignment,
+          rawChallengeToken,
+        };
+      }
+
+      // Fallback direct table insertion
       const { data: assignmentData, error: assignError } = await supabase
         .from('assignments')
         .insert({
@@ -774,10 +929,9 @@ export const gameService = {
         .single();
 
       if (assignError) {
-        throw new Error(`Assignment creation failed: ${assignError.message}`);
+        throw new Error(`Assignment creation failed in Supabase: ${assignError.message}`);
       }
 
-      // Insert Question linked to assignment
       const { error: qError } = await supabase.from('questions').insert({
         assignment_id: assignmentData.id,
         topic_category: topicName,
@@ -792,7 +946,7 @@ export const gameService = {
       });
 
       if (qError) {
-        console.error('Question insertion error:', qError);
+        throw new Error(`Question creation failed in Supabase: ${qError.message}`);
       }
 
       await supabase.from('participants').update({ status: 'selected' }).eq('id', senderId);
@@ -870,9 +1024,10 @@ export const gameService = {
         p_token_hash: tokenHash,
       });
 
-      if (!error && data) {
-        return data;
+      if (error) {
+        throw new Error(`Failed to load challenge from Supabase: ${error.message}`);
       }
+      return data || null;
     }
 
     // Local mode
@@ -1033,7 +1188,7 @@ export const gameService = {
   // --- Monitoring & Rounds ---
   async getLiveAssignments(gameId: string): Promise<Assignment[]> {
     if (isSupabaseConfigured) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('assignments')
         .select(`
           id,
@@ -1054,18 +1209,20 @@ export const gameService = {
         .eq('game_id', gameId)
         .order('created_at', { ascending: false });
 
-      if (data) {
-        const tokenCache = getLocal<Record<string, string>>('challenge_token_cache', {});
-        return data.map((item: any) => ({
-          ...item,
-          raw_challenge_token: tokenCache[item.id] || item.challenge_token_hash,
-          sender: item.sender,
-          receiver: item.receiver,
-          topic: item.topic,
-          question: item.question,
-          answer: Array.isArray(item.answer) ? item.answer[0] : item.answer,
-        })) as Assignment[];
+      if (error) {
+        throw new Error(`Failed to load live assignments from Supabase: ${error.message}`);
       }
+
+      const tokenCache = getLocal<Record<string, string>>('challenge_token_cache', {});
+      return (data || []).map((item: any) => ({
+        ...item,
+        raw_challenge_token: tokenCache[item.id] || item.challenge_token_hash,
+        sender: item.sender,
+        receiver: item.receiver,
+        topic: item.topic,
+        question: item.question,
+        answer: Array.isArray(item.answer) ? item.answer[0] : item.answer,
+      })) as Assignment[];
     }
 
     // Local mode
@@ -1093,7 +1250,10 @@ export const gameService = {
 
   async revealRound(roundId: string, gameId: string): Promise<void> {
     if (isSupabaseConfigured) {
-      await supabase.rpc('reveal_round_answers', { p_round_id: roundId });
+      const { error } = await supabase.rpc('reveal_round_answers', { p_round_id: roundId });
+      if (error) {
+        throw new Error(`Failed to reveal round answers in Supabase: ${error.message}`);
+      }
       return;
     }
 
@@ -1118,10 +1278,14 @@ export const gameService = {
     const participants = await this.getParticipants(gameId);
 
     if (isSupabaseConfigured) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('scores')
         .select('*')
         .eq('game_id', gameId);
+
+      if (error) {
+        throw new Error(`Failed to load leaderboard from Supabase: ${error.message}`);
+      }
 
       const scoreMap = new Map<string, Score>();
       if (data) {
