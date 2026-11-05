@@ -16,14 +16,14 @@ BEGIN
     SET email_confirmed_at = COALESCE(email_confirmed_at, now())
     WHERE email = v_admin_email;
 
-    -- 2. Fetch the user id
+    -- 2. Fetch the user id from auth.users
     SELECT id INTO v_user_id FROM auth.users WHERE email = v_admin_email;
 
     -- 3. Grant Admin privileges in public.admins
     IF v_user_id IS NOT NULL THEN
-        INSERT INTO public.admins (user_id, email, is_superadmin)
-        VALUES (v_user_id, v_admin_email, true)
-        ON CONFLICT (user_id) DO UPDATE SET is_superadmin = true;
+        INSERT INTO public.admins (user_id, email)
+        VALUES (v_user_id, v_admin_email)
+        ON CONFLICT (user_id) DO NOTHING;
         
         RAISE NOTICE 'SUCCESS: User % (ID: %) confirmed and granted Admin privileges!', v_admin_email, v_user_id;
     ELSE
