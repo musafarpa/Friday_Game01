@@ -39,3 +39,4 @@ describe('Friday Fun 2026 - Sharing & WhatsApp Integrations', () => {
     expect(decoded).toContain(challengeUrl);
   });
 });
+

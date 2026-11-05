@@ -66,3 +66,4 @@ describe('Friday Fun 2026 - Question Bank & Generator QA', () => {
     expect(qKerala.topic).toBe('Kerala & Current Affairs');
   });
 });
+

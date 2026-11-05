@@ -50,3 +50,4 @@ describe('Friday Fun 2026 - Accessible UI Components', () => {
     expect(screen.getByText('Game Overview')).toBeInTheDocument();
   });
 });
+

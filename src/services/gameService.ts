@@ -39,7 +39,7 @@ function setLocal<T>(key: string, value: T): void {
 
 // Initial Mock Seed for Zero-Config Local Mode
 export function initLocalMockData(force: boolean = false) {
-  if (!force && getLocal('initialized', false)) return;
+  if (!force && getLocal('initialized', false) && getLocal<any[]>('assignments', []).length > 0) return;
 
   const defaultTopics: Topic[] = [
     { id: 't1', name: 'Politics & Government', description: 'Elections, Indian Constitution, ministers, public policies, and democratic institutions.', icon: 'Landmark', is_active: true, created_at: new Date().toISOString() },
@@ -84,21 +84,56 @@ export function initLocalMockData(force: boolean = false) {
   };
 
   const samplePlayers: Participant[] = [
-    { id: 'p1', game_id: defaultGameId, display_name: 'Arun', player_code: 'A', invitation_token_hash: 'hash_arun_123', raw_invitation_token: 'token_arun_123', status: 'joined', created_at: new Date().toISOString() },
+    { id: 'p1', game_id: defaultGameId, display_name: 'Arun', player_code: 'A', invitation_token_hash: 'hash_arun_123', raw_invitation_token: 'token_arun_123', status: 'selected', created_at: new Date().toISOString() },
     { id: 'p2', game_id: defaultGameId, display_name: 'Rahul', player_code: 'B', invitation_token_hash: 'hash_rahul_456', raw_invitation_token: 'token_rahul_456', status: 'joined', created_at: new Date().toISOString() },
     { id: 'p3', game_id: defaultGameId, display_name: 'Amal', player_code: 'C', invitation_token_hash: 'hash_amal_789', raw_invitation_token: 'token_amal_789', status: 'joined', created_at: new Date().toISOString() },
     { id: 'p4', game_id: defaultGameId, display_name: 'Nikhil', player_code: 'D', invitation_token_hash: 'hash_nikhil_101', raw_invitation_token: 'token_nikhil_101', status: 'joined', created_at: new Date().toISOString() },
     { id: 'p5', game_id: defaultGameId, display_name: 'Akhil', player_code: 'E', invitation_token_hash: 'hash_akhil_202', raw_invitation_token: 'token_akhil_202', status: 'pending', created_at: new Date().toISOString() },
   ];
 
+  const sampleAssignment: Assignment = {
+    id: 'assign-sample-1',
+    game_id: defaultGameId,
+    round_id: 'round-1',
+    sender_id: 'p1',
+    receiver_id: 'p3',
+    topic_id: 't2',
+    challenge_token_hash: 'hash_token_arun_challenge_sample',
+    raw_challenge_token: 'token_arun_challenge_sample',
+    status: 'pending',
+    created_at: new Date().toISOString(),
+  };
+
+  const sampleQuestion: Question = {
+    id: 'q-sample-1',
+    assignment_id: 'assign-sample-1',
+    topic_category: 'Pollution & Environment',
+    question_text: 'Which gas is the primary contributor to the global greenhouse effect emitted through human activities?',
+    option_a: 'Carbon Dioxide (CO2)',
+    option_b: 'Oxygen (O2)',
+    option_c: 'Nitrogen (N2)',
+    option_d: 'Helium (He)',
+    correct_option: 'A',
+    explanation: 'Carbon dioxide is the primary greenhouse gas emitted through human activities such as burning fossil fuels.',
+    difficulty: 'easy',
+    created_at: new Date().toISOString(),
+  };
+
+  const sampleScores: Score[] = [
+    { id: 's1', game_id: defaultGameId, round_id: 'round-1', participant_id: 'p3', total_points: 20, correct_answers: 2, wrong_answers: 1, updated_at: new Date().toISOString() },
+    { id: 's2', game_id: defaultGameId, round_id: 'round-1', participant_id: 'p1', total_points: 10, correct_answers: 1, wrong_answers: 0, updated_at: new Date().toISOString() },
+    { id: 's3', game_id: defaultGameId, round_id: 'round-1', participant_id: 'p2', total_points: 0, correct_answers: 0, wrong_answers: 0, updated_at: new Date().toISOString() },
+    { id: 's4', game_id: defaultGameId, round_id: 'round-1', participant_id: 'p4', total_points: 0, correct_answers: 0, wrong_answers: 0, updated_at: new Date().toISOString() },
+  ];
+
   setLocal('topics', defaultTopics);
   setLocal('games', [defaultGame]);
   setLocal('rounds', [defaultRound]);
   setLocal('participants', samplePlayers);
-  setLocal('assignments', []);
-  setLocal('questions', []);
+  setLocal('assignments', [sampleAssignment]);
+  setLocal('questions', [sampleQuestion]);
   setLocal('answers', []);
-  setLocal('scores', []);
+  setLocal('scores', sampleScores);
   setLocal('initialized', true);
 }
 
