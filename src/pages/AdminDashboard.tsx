@@ -791,32 +791,38 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {participants.slice(0, 6).map((p) => {
-                  const inviteUrl = buildInvitationUrl(selectedGame?.id || '', p.raw_invitation_token || p.invitation_token_hash);
-                  const waUrl = generateInvitationWhatsAppUrl(p.display_name, inviteUrl);
-                  return (
-                    <div
-                      key={p.id}
-                      className="p-3.5 rounded-xl bg-background-darker border border-background-border flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <PlayerAvatar displayName={p.display_name} playerCode={p.player_code} size="sm" />
-                        <div>
-                          <p className="text-sm font-bold text-white leading-none">
-                            {p.display_name}
-                          </p>
-                          <span className="text-[11px] text-slate-500">
-                            Status: <span className="capitalize text-slate-300">{p.status}</span>
-                          </span>
+                {participants.length === 0 ? (
+                  <div className="col-span-full py-8 text-center text-slate-400 text-sm">
+                    No participants yet. {selectedGame ? 'Add players from the Participants tab.' : 'Create a game room to start adding players.'}
+                  </div>
+                ) : (
+                  participants.slice(0, 6).map((p) => {
+                    const inviteUrl = buildInvitationUrl(selectedGame?.id || '', p.raw_invitation_token || p.invitation_token_hash);
+                    const waUrl = generateInvitationWhatsAppUrl(p.display_name, inviteUrl);
+                    return (
+                      <div
+                        key={p.id}
+                        className="p-3.5 rounded-xl bg-background-darker border border-background-border flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <PlayerAvatar displayName={p.display_name} playerCode={p.player_code} size="sm" />
+                          <div>
+                            <p className="text-sm font-bold text-white leading-none">
+                              {p.display_name}
+                            </p>
+                            <span className="text-[11px] text-slate-500">
+                              Status: <span className="capitalize text-slate-300">{p.status}</span>
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <CopyButton textToCopy={inviteUrl} size="sm" variant="ghost" label="" copiedLabel="" />
+                          <WhatsAppButton url={waUrl} size="sm" label="" />
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <CopyButton textToCopy={inviteUrl} size="sm" variant="ghost" label="" copiedLabel="" />
-                        <WhatsAppButton url={waUrl} size="sm" label="" />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -845,7 +851,23 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {games.map((g) => (
+              {games.length === 0 ? (
+                <div className="col-span-full p-12 text-center rounded-2xl bg-background-card border border-background-border">
+                  <Gamepad2 className="w-12 h-12 text-indigo-400/50 mx-auto mb-3" />
+                  <h3 className="text-base font-bold text-white mb-1">No Game Rooms Yet</h3>
+                  <p className="text-xs text-slate-400 mb-4 max-w-sm mx-auto">
+                    Your cloud database is clean and ready. Click below to create your first official multiplayer game room!
+                  </p>
+                  <button
+                    onClick={() => setShowCreateGame(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm min-h-[44px]"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Your First Game</span>
+                  </button>
+                </div>
+              ) : (
+                games.map((g) => (
                 <div
                   key={g.id}
                   className={`p-6 rounded-2xl border transition-all ${
@@ -968,7 +990,7 @@ export const AdminDashboard: React.FC = () => {
                     )}
                   </div>
                 </div>
-              ))}
+              ))) }
             </div>
           </div>
         )}

@@ -41,6 +41,18 @@ function setLocal<T>(key: string, value: T): void {
 
 // Initial Mock Seed for Zero-Config Local Mode
 export function initLocalMockData(force: boolean = false) {
+  if (isSupabaseConfigured) {
+    // When connected to real Supabase, ensure offline demo data is purged
+    if (typeof localStorage !== 'undefined') {
+      ['games', 'rounds', 'participants', 'assignments', 'questions', 'answers', 'scores', 'initialized'].forEach((k) => {
+        try {
+          localStorage.removeItem(STORAGE_PREFIX + k);
+        } catch {}
+      });
+    }
+    return;
+  }
+
   if (!force && getLocal('initialized', false) && getLocal<any[]>('assignments', []).length > 0) return;
 
   const defaultTopics: Topic[] = [
