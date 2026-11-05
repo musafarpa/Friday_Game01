@@ -205,3 +205,4 @@ vercel
 
 ## 📄 License
 MIT License. Crafted for high-energy social gaming, team celebrations, and college events!
+

@@ -536,3 +536,4 @@ alter publication supabase_realtime add table public.assignments;
 alter publication supabase_realtime add table public.answers;
 alter publication supabase_realtime add table public.scores;
 alter publication supabase_realtime add table public.game_events;
+

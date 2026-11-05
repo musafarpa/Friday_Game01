@@ -4,6 +4,7 @@ import { generateQuestionForTopic } from './questionGenerator';
 import {
   Game,
   GameSettings,
+  GameStatus,
   Participant,
   Topic,
   GameRound,
@@ -37,8 +38,8 @@ function setLocal<T>(key: string, value: T): void {
 }
 
 // Initial Mock Seed for Zero-Config Local Mode
-function initLocalMockData() {
-  if (getLocal('initialized', false)) return;
+export function initLocalMockData(force: boolean = false) {
+  if (!force && getLocal('initialized', false)) return;
 
   const defaultTopics: Topic[] = [
     { id: 't1', name: 'Politics & Government', description: 'Elections, Indian Constitution, ministers, public policies, and democratic institutions.', icon: 'Landmark', is_active: true, created_at: new Date().toISOString() },
@@ -111,7 +112,6 @@ export const gameService = {
   // --- Admin Auth ---
   async checkIsAdmin(): Promise<boolean> {
     if (!isSupabaseConfigured) {
-      // In local demo mode, check local storage admin session
       return getLocal<boolean>('is_admin_session', false);
     }
     const { data: { user } } = await supabase.auth.getUser();
@@ -125,18 +125,25 @@ export const gameService = {
   },
 
   async loginAdmin(email: string, pass: string): Promise<{ success: boolean; error?: string }> {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      return { success: false, error: 'Email cannot be empty.' };
+    }
+    if (!pass) {
+      return { success: false, error: 'Password cannot be empty.' };
+    }
+
     if (!isSupabaseConfigured) {
-      // Local demo mode credentials
-      if (email.toLowerCase().includes('admin') || pass.length >= 6) {
+      if (cleanEmail.toLowerCase().includes('admin') || pass.length >= 6) {
         setLocal('is_admin_session', true);
-        setLocal('admin_email', email);
+        setLocal('admin_email', cleanEmail);
         return { success: true };
       }
       return { success: false, error: 'Invalid password. Password must be at least 6 characters.' };
     }
 
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: cleanEmail,
       password: pass,
     });
 
@@ -179,16 +186,31 @@ export const gameService = {
     return games.find((g) => g.id === gameId) || null;
   },
 
-  async createGame(name: string, description: string, settings: Partial<GameSettings>): Promise<Game> {
+  async createGame(name: string, description: string, settings: Partial<GameSettings>, initialStatus: GameStatus = 'registration_open'): Promise<Game> {
+    const cleanName = name.trim();
+    if (!cleanName) {
+      throw new Error('Game name cannot be empty.');
+    }
+
+    const minPart = settings.min_participants ?? 3;
+    const maxPart = settings.max_participants ?? 30;
+
+    if (minPart < 2) {
+      throw new Error('Minimum participants must be at least 2.');
+    }
+    if (maxPart < minPart) {
+      throw new Error('Maximum participants cannot be less than minimum participants.');
+    }
+
     const fullSettings: GameSettings = {
-      min_participants: 3,
-      max_participants: 30,
-      questions_per_participant: 1,
-      points_correct: 10,
-      points_wrong: 0,
-      difficulty_distribution: { easy: 40, medium: 40, hard: 20 },
-      reveal_mode: 'admin_manual_or_all',
-      allow_multiple_incoming: true,
+      min_participants: minPart,
+      max_participants: maxPart,
+      questions_per_participant: settings.questions_per_participant ?? 1,
+      points_correct: settings.points_correct ?? 10,
+      points_wrong: settings.points_wrong ?? 0,
+      difficulty_distribution: settings.difficulty_distribution ?? { easy: 40, medium: 40, hard: 20 },
+      reveal_mode: settings.reveal_mode ?? 'admin_manual_or_all',
+      allow_multiple_incoming: settings.allow_multiple_incoming ?? true,
       ...settings,
     };
 
@@ -197,10 +219,10 @@ export const gameService = {
       const { data: newGame, error } = await supabase
         .from('games')
         .insert({
-          name,
-          description,
+          name: cleanName,
+          description: description?.trim() || '',
           game_date: new Date().toISOString().split('T')[0],
-          status: 'registration_open',
+          status: initialStatus,
           settings: fullSettings,
           created_by: user.user?.id,
         })
@@ -222,10 +244,10 @@ export const gameService = {
     const games = getLocal<Game[]>('games', []);
     const newGame: Game = {
       id: `game-${Date.now()}`,
-      name,
-      description,
+      name: cleanName,
+      description: description?.trim() || '',
       game_date: new Date().toISOString().split('T')[0],
-      status: 'registration_open',
+      status: initialStatus,
       settings: fullSettings,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -246,7 +268,51 @@ export const gameService = {
     return newGame;
   },
 
-  async updateGameStatus(gameId: string, status: Game['status']): Promise<void> {
+  async updateGame(gameId: string, updates: Partial<Game>): Promise<Game | null> {
+    if (updates.name && !updates.name.trim()) {
+      throw new Error('Game name cannot be empty.');
+    }
+
+    if (updates.settings) {
+      if (updates.settings.min_participants && updates.settings.min_participants < 2) {
+        throw new Error('Minimum participants must be at least 2.');
+      }
+      if (
+        updates.settings.min_participants &&
+        updates.settings.max_participants &&
+        updates.settings.max_participants < updates.settings.min_participants
+      ) {
+        throw new Error('Maximum participants cannot be less than minimum participants.');
+      }
+    }
+
+    const payload: any = {
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase
+        .from('games')
+        .update(payload)
+        .eq('id', gameId)
+        .select()
+        .single();
+
+      if (!error && data) return data as Game;
+    }
+
+    const games = getLocal<Game[]>('games', []);
+    const idx = games.findIndex((g) => g.id === gameId);
+    if (idx !== -1) {
+      games[idx] = { ...games[idx], ...payload };
+      setLocal('games', games);
+      return games[idx];
+    }
+    return null;
+  },
+
+  async updateGameStatus(gameId: string, status: GameStatus): Promise<void> {
     if (isSupabaseConfigured) {
       await supabase
         .from('games')
@@ -274,7 +340,12 @@ export const gameService = {
         .order('name');
       if (data && data.length > 0) return data as Topic[];
     }
-    return getLocal<Topic[]>('topics', []).filter((t) => t.is_active);
+    let local = getLocal<Topic[]>('topics', []);
+    if (local.length === 0) {
+      initLocalMockData(true);
+      local = getLocal<Topic[]>('topics', []);
+    }
+    return local.filter((t) => t.is_active);
   },
 
   async getAllTopics(): Promise<Topic[]> {
@@ -282,7 +353,12 @@ export const gameService = {
       const { data } = await supabase.from('topics').select('*').order('name');
       if (data && data.length > 0) return data as Topic[];
     }
-    return getLocal<Topic[]>('topics', []);
+    let local = getLocal<Topic[]>('topics', []);
+    if (local.length === 0) {
+      initLocalMockData(true);
+      local = getLocal<Topic[]>('topics', []);
+    }
+    return local;
   },
 
   async toggleTopic(topicId: string, isActive: boolean): Promise<void> {
@@ -299,19 +375,29 @@ export const gameService = {
   },
 
   async addTopic(name: string, description: string, icon: string = 'Sparkles'): Promise<Topic> {
+    const cleanName = name.trim();
+    if (!cleanName) {
+      throw new Error('Topic category name cannot be empty.');
+    }
+
+    const existing = await this.getAllTopics();
+    if (existing.some((t) => t.name.toLowerCase() === cleanName.toLowerCase())) {
+      throw new Error(`Topic "${cleanName}" already exists.`);
+    }
+
     if (isSupabaseConfigured) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('topics')
-        .insert({ name, description, icon, is_active: true })
+        .insert({ name: cleanName, description: description?.trim() || '', icon, is_active: true })
         .select()
         .single();
-      if (data) return data as Topic;
+      if (!error && data) return data as Topic;
     }
     const topics = getLocal<Topic[]>('topics', []);
     const newTopic: Topic = {
       id: `topic-${Date.now()}`,
-      name,
-      description,
+      name: cleanName,
+      description: description?.trim() || '',
       icon,
       is_active: true,
       created_at: new Date().toISOString(),
@@ -319,6 +405,43 @@ export const gameService = {
     topics.push(newTopic);
     setLocal('topics', topics);
     return newTopic;
+  },
+
+  async editTopic(topicId: string, name: string, description: string): Promise<Topic | null> {
+    const cleanName = name.trim();
+    if (!cleanName) {
+      throw new Error('Topic category name cannot be empty.');
+    }
+
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase
+        .from('topics')
+        .update({ name: cleanName, description: description.trim() })
+        .eq('id', topicId)
+        .select()
+        .single();
+      if (!error && data) return data as Topic;
+    }
+
+    const topics = getLocal<Topic[]>('topics', []);
+    const t = topics.find((item) => item.id === topicId);
+    if (t) {
+      t.name = cleanName;
+      t.description = description.trim();
+      setLocal('topics', topics);
+      return t;
+    }
+    return null;
+  },
+
+  async deleteTopic(topicId: string): Promise<void> {
+    if (isSupabaseConfigured) {
+      await supabase.from('topics').delete().eq('id', topicId);
+      return;
+    }
+    let topics = getLocal<Topic[]>('topics', []);
+    topics = topics.filter((t) => t.id !== topicId);
+    setLocal('topics', topics);
   },
 
   // --- Participants ---
@@ -330,7 +453,6 @@ export const gameService = {
         .eq('game_id', gameId)
         .order('player_code', { ascending: true });
       if (data) {
-        // Hydrate raw tokens from local token cache if admin previously generated them
         const tokenCache = getLocal<Record<string, string>>('token_cache', {});
         return data.map((p) => ({
           ...p,
@@ -348,6 +470,24 @@ export const gameService = {
     playerCode: string,
     emailOrContact?: string
   ): Promise<{ participant: Participant; rawToken: string }> {
+    const cleanName = displayName.trim();
+    const cleanCode = playerCode.trim().toUpperCase();
+
+    if (!cleanName) {
+      throw new Error('Participant name cannot be empty.');
+    }
+    if (!cleanCode) {
+      throw new Error('Player code cannot be empty.');
+    }
+
+    const existing = await this.getParticipants(gameId);
+    if (existing.some((p) => p.player_code.toUpperCase() === cleanCode)) {
+      throw new Error(`Player Code "${cleanCode}" is already taken in this game.`);
+    }
+    if (existing.some((p) => p.display_name.toLowerCase() === cleanName.toLowerCase())) {
+      throw new Error(`A participant named "${cleanName}" already exists in this game.`);
+    }
+
     const rawToken = generateSecureToken(24);
     const tokenHash = await hashToken(rawToken);
 
@@ -356,9 +496,9 @@ export const gameService = {
         .from('participants')
         .insert({
           game_id: gameId,
-          display_name: displayName,
-          player_code: playerCode.toUpperCase(),
-          email_or_contact: emailOrContact,
+          display_name: cleanName,
+          player_code: cleanCode,
+          email_or_contact: emailOrContact?.trim() || null,
           invitation_token_hash: tokenHash,
           status: 'pending',
         })
@@ -369,7 +509,6 @@ export const gameService = {
         throw new Error(error.message);
       }
 
-      // Cache raw token locally on admin device for convenient copy/whatsapp
       const tokenCache = getLocal<Record<string, string>>('token_cache', {});
       tokenCache[data.id] = rawToken;
       setLocal('token_cache', tokenCache);
@@ -385,9 +524,9 @@ export const gameService = {
     const newParticipant: Participant = {
       id: `p-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       game_id: gameId,
-      display_name: displayName,
-      player_code: playerCode.toUpperCase(),
-      email_or_contact: emailOrContact,
+      display_name: cleanName,
+      player_code: cleanCode,
+      email_or_contact: emailOrContact?.trim(),
       invitation_token_hash: tokenHash,
       raw_invitation_token: rawToken,
       status: 'pending',
@@ -401,6 +540,36 @@ export const gameService = {
     setLocal('token_cache', tokenCache);
 
     return { participant: newParticipant, rawToken };
+  },
+
+  async updateParticipant(
+    participantId: string,
+    updates: { displayName?: string; playerCode?: string; emailOrContact?: string }
+  ): Promise<Participant | null> {
+    const participants = getLocal<Participant[]>('participants', []);
+    const target = participants.find((p) => p.id === participantId);
+    if (!target) return null;
+
+    if (updates.displayName) target.display_name = updates.displayName.trim();
+    if (updates.playerCode) target.player_code = updates.playerCode.trim().toUpperCase();
+    if (updates.emailOrContact !== undefined) target.email_or_contact = updates.emailOrContact.trim();
+
+    if (isSupabaseConfigured) {
+      const { data } = await supabase
+        .from('participants')
+        .update({
+          display_name: target.display_name,
+          player_code: target.player_code,
+          email_or_contact: target.email_or_contact,
+        })
+        .eq('id', participantId)
+        .select()
+        .single();
+      if (data) return data as Participant;
+    }
+
+    setLocal('participants', participants);
+    return target;
   },
 
   async removeParticipant(participantId: string): Promise<void> {
@@ -429,25 +598,54 @@ export const gameService = {
     return rounds.find((r) => r.game_id === gameId) || null;
   },
 
+  async closeRoundManually(roundId: string, gameId: string): Promise<void> {
+    if (isSupabaseConfigured) {
+      await supabase
+        .from('game_rounds')
+        .update({ status: 'closed' })
+        .eq('id', roundId);
+      return;
+    }
+    const rounds = getLocal<GameRound[]>('rounds', []);
+    const round = rounds.find((r) => r.id === roundId);
+    if (round) {
+      round.status = 'closed';
+      setLocal('rounds', rounds);
+    }
+  },
+
+  // --- Incoming Challenges For Participant ---
+  async getIncomingChallenges(receiverParticipantId: string, gameId: string): Promise<any[]> {
+    const assignments = await this.getLiveAssignments(gameId);
+    return assignments.filter((a) => a.receiver_id === receiverParticipantId);
+  },
+
   // --- Participant Flow & Joining ---
   async getParticipantByInvitationToken(
     gameId: string,
     rawToken: string
-  ): Promise<{ participant: Participant; game: Game; hasSelected: boolean; existingAssignment?: Assignment } | null> {
+  ): Promise<{
+    participant: Participant;
+    game: Game;
+    hasSelected: boolean;
+    existingAssignment?: Assignment;
+    incomingChallenges: any[];
+  } | null> {
     const tokenHash = await hashToken(rawToken);
 
     if (isSupabaseConfigured) {
-      // Use secure RPC function
       const { data, error } = await supabase.rpc('get_participant_by_token', {
         p_token_hash: tokenHash,
       });
 
       if (!error && data && data.participant) {
+        const incoming = await this.getIncomingChallenges(data.participant.id, gameId);
         return {
           participant: data.participant as Participant,
           game: data.game as Game,
           hasSelected: Boolean(data.has_selected),
           existingAssignment: data.existing_assignment as Assignment,
+          incomingChallenges: incoming,
         };
       }
     }
@@ -490,12 +688,14 @@ export const gameService = {
 
     const assignments = getLocal<Assignment[]>('assignments', []);
     const existing = assignments.find((a) => a.sender_id === p.id && a.game_id === gameId);
+    const incoming = await this.getIncomingChallenges(p.id, gameId);
 
     return {
       participant: p,
       game,
       hasSelected: Boolean(existing),
       existingAssignment: existing,
+      incomingChallenges: incoming,
     };
   },
 
@@ -560,10 +760,8 @@ export const gameService = {
         console.error('Question insertion error:', qError);
       }
 
-      // Update sender status
       await supabase.from('participants').update({ status: 'selected' }).eq('id', senderId);
 
-      // Cache raw challenge token on client for easy share link access
       const challengeCache = getLocal<Record<string, string>>('challenge_token_cache', {});
       challengeCache[assignmentData.id] = rawChallengeToken;
       setLocal('challenge_token_cache', challengeCache);
@@ -612,7 +810,6 @@ export const gameService = {
     questions.push(newQuestion);
     setLocal('questions', questions);
 
-    // Update sender status
     const sender = participants.find((p) => p.id === senderId);
     if (sender) {
       sender.status = 'selected';
@@ -705,6 +902,10 @@ export const gameService = {
   },
 
   async submitAnswer(rawChallengeToken: string, selectedOption: 'A' | 'B' | 'C' | 'D'): Promise<{ success: boolean; error?: string }> {
+    if (!['A', 'B', 'C', 'D'].includes(selectedOption)) {
+      return { success: false, error: 'Invalid answer option. Must be A, B, C, or D.' };
+    }
+
     const tokenHash = await hashToken(rawChallengeToken);
 
     if (isSupabaseConfigured) {
@@ -724,6 +925,7 @@ export const gameService = {
     const questions = getLocal<Question[]>('questions', []);
     const answers = getLocal<Answer[]>('answers', []);
     const scores = getLocal<Score[]>('scores', []);
+    const games = getLocal<Game[]>('games', []);
 
     const assignment = assignments.find(
       (a) => a.challenge_token_hash === tokenHash || a.raw_challenge_token === rawChallengeToken
@@ -759,7 +961,10 @@ export const gameService = {
     assignment.status = 'submitted';
     setLocal('assignments', assignments);
 
-    // Update or insert score
+    const game = games.find((g) => g.id === assignment.game_id);
+    const pointsCorrect = game?.settings?.points_correct ?? 10;
+    const pointsWrong = game?.settings?.points_wrong ?? 0;
+
     let score = scores.find(
       (s) => s.game_id === assignment.game_id && s.participant_id === assignment.receiver_id
     );
@@ -779,9 +984,10 @@ export const gameService = {
 
     if (isCorrect) {
       score.correct_answers += 1;
-      score.total_points += 10;
+      score.total_points += pointsCorrect;
     } else {
       score.wrong_answers += 1;
+      score.total_points += pointsWrong;
     }
     score.updated_at = new Date().toISOString();
     setLocal('scores', scores);
@@ -889,7 +1095,6 @@ export const gameService = {
         });
       }
 
-      // Ensure every participant is in leaderboard even with 0 points
       const result: Score[] = participants.map((p) => {
         const sc = scoreMap.get(p.id);
         return {
@@ -934,7 +1139,6 @@ export const gameService = {
   // --- Realtime Subscriptions ---
   subscribeToGameUpdates(gameId: string, onUpdate: () => void) {
     if (!isSupabaseConfigured) {
-      // Local mode polling interval for changes
       const interval = setInterval(onUpdate, 3000);
       return () => clearInterval(interval);
     }

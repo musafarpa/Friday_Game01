@@ -19,33 +19,36 @@ export async function generateQuestionForTopic(
   excludeQuestions: string[] = []
 ): Promise<GeneratedQuestion> {
   try {
-    const response = await fetch('/api/generate-question', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        topic: topicName,
-        difficulty,
-        excludeQuestions,
-      }),
-    });
+    const baseUrl = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+    if (baseUrl && baseUrl.startsWith('http')) {
+      const response = await fetch(`${baseUrl}/api/generate-question`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topic: topicName,
+          difficulty,
+          excludeQuestions,
+        }),
+      });
 
-    if (response.ok) {
-      const data = await response.json();
-      if (
-        data.question &&
-        data.option_a &&
-        data.option_b &&
-        data.option_c &&
-        data.option_d &&
-        ['A', 'B', 'C', 'D'].includes(data.correct_option)
-      ) {
-        return data as GeneratedQuestion;
+      if (response.ok) {
+        const data = await response.json();
+        if (
+          data.question &&
+          data.option_a &&
+          data.option_b &&
+          data.option_c &&
+          data.option_d &&
+          ['A', 'B', 'C', 'D'].includes(data.correct_option)
+        ) {
+          return data as GeneratedQuestion;
+        }
       }
     }
   } catch (err) {
-    console.warn('API question generation unavailable, using Question Bank:', err);
+    // API unavailable, fallback cleanly
   }
 
   // Guaranteed fallback to question bank
@@ -55,3 +58,4 @@ export async function generateQuestionForTopic(
     source: 'question-bank',
   };
 }
+

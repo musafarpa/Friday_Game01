@@ -145,3 +145,4 @@ export const Navbar: React.FC<NavbarProps> = ({ isAdmin = false, onAdminLogout }
     </header>
   );
 };
+

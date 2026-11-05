@@ -24,3 +24,4 @@ export function getAvatarForPlayer(codeOrName: string): AvatarPreset {
   const index = Math.abs(hash) % AVATAR_PRESETS.length;
   return AVATAR_PRESETS[index];
 }
+

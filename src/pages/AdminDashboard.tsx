@@ -16,9 +16,12 @@ import {
   Clock,
   ExternalLink,
   Trash2,
+  Edit2,
   Download,
   AlertTriangle,
   Play,
+  Pause,
+  XCircle,
   Share2,
 } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
@@ -29,6 +32,7 @@ import { CopyButton } from '../components/CopyButton';
 import { gameService } from '../services/gameService';
 import {
   Game,
+  GameStatus,
   Participant,
   Topic,
   Assignment,
@@ -55,6 +59,7 @@ export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [loading, setLoading] = useState(true);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   // Data states
   const [games, setGames] = useState<Game[]>([]);
@@ -73,6 +78,13 @@ export const AdminDashboard: React.FC = () => {
   const [participantSearch, setParticipantSearch] = useState('');
   const [participantFormError, setParticipantFormError] = useState('');
 
+  // Edit Participant state
+  const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null);
+  const [editPlayerName, setEditPlayerName] = useState('');
+  const [editPlayerCode, setEditPlayerCode] = useState('');
+  const [editPlayerContact, setEditPlayerContact] = useState('');
+  const [editParticipantError, setEditParticipantError] = useState('');
+
   // Game Creation Form state
   const [showCreateGame, setShowCreateGame] = useState(false);
   const [newGameName, setNewGameName] = useState('');
@@ -80,14 +92,44 @@ export const AdminDashboard: React.FC = () => {
   const [newGameMin, setNewGameMin] = useState(3);
   const [newGameMax, setNewGameMax] = useState(30);
   const [newGamePoints, setNewGamePoints] = useState(10);
+  const [newGameStatus, setNewGameStatus] = useState<GameStatus>('registration_open');
+  const [createGameError, setCreateGameError] = useState('');
 
-  // New Topic Form state
+  // Edit Game state
+  const [editingGame, setEditingGame] = useState<Game | null>(null);
+  const [editGameName, setEditGameName] = useState('');
+  const [editGameDesc, setEditGameDesc] = useState('');
+  const [editGameMin, setEditGameMin] = useState(3);
+  const [editGameMax, setEditGameMax] = useState(30);
+  const [editGamePoints, setEditGamePoints] = useState(10);
+  const [editGameError, setEditGameError] = useState('');
+
+  // Topic Modals
   const [showAddTopic, setShowAddTopic] = useState(false);
   const [newTopicName, setNewTopicName] = useState('');
   const [newTopicDesc, setNewTopicDesc] = useState('');
+  const [topicError, setTopicError] = useState('');
+
+  const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
+  const [editTopicName, setEditTopicName] = useState('');
+  const [editTopicDesc, setEditTopicDesc] = useState('');
 
   // Action status message
   const [statusBanner, setStatusBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Verify Admin Auth on Mount
+  useEffect(() => {
+    const verifyAuth = async () => {
+      const isAdmin = await gameService.checkIsAdmin();
+      if (!isAdmin) {
+        navigate('/admin/login', { replace: true });
+        return;
+      }
+      setCheckingAuth(false);
+      refreshAllData();
+    };
+    verifyAuth();
+  }, []);
 
   // Load Data
   const refreshAllData = async () => {
@@ -97,7 +139,7 @@ export const AdminDashboard: React.FC = () => {
       setGames(allGames);
 
       let current = selectedGame;
-      if (!current && allGames.length > 0) {
+      if ((!current || !allGames.some((g) => g.id === current?.id)) && allGames.length > 0) {
         current = allGames[0];
         setSelectedGame(current);
       }
@@ -123,15 +165,10 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    refreshAllData();
-  }, []);
-
   // Subscribe to live Realtime updates for selected game
   useEffect(() => {
     if (!selectedGame) return;
     const unsubscribe = gameService.subscribeToGameUpdates(selectedGame.id, () => {
-      // Reload live assignments and leaderboard silently on changes
       gameService.getLiveAssignments(selectedGame.id).then(setAssignments);
       gameService.getLeaderboard(selectedGame.id).then(setLeaderboard);
       gameService.getParticipants(selectedGame.id).then(setParticipants);
@@ -139,7 +176,6 @@ export const AdminDashboard: React.FC = () => {
     return () => unsubscribe();
   }, [selectedGame?.id]);
 
-  // Next suggested player code (A, B, C, D...)
   const getNextPlayerCode = (): string => {
     const existingCodes = participants.map((p) => p.player_code.toUpperCase());
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -159,24 +195,8 @@ export const AdminDashboard: React.FC = () => {
       return;
     }
 
-    if (!newPlayerName.trim()) {
-      setParticipantFormError('Please enter participant name');
-      return;
-    }
-
-    const code = newPlayerCode.trim() || getNextPlayerCode();
-
-    // Check duplicate code or name
-    if (participants.some((p) => p.player_code.toUpperCase() === code.toUpperCase())) {
-      setParticipantFormError(`Player code "${code}" is already assigned in this game.`);
-      return;
-    }
-    if (participants.some((p) => p.display_name.toLowerCase() === newPlayerName.trim().toLowerCase())) {
-      setParticipantFormError(`A player named "${newPlayerName}" already exists.`);
-      return;
-    }
-
     try {
+      const code = newPlayerCode.trim() || getNextPlayerCode();
       const { participant } = await gameService.addParticipant(
         selectedGame.id,
         newPlayerName.trim(),
@@ -199,6 +219,32 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  // Edit Participant Handler
+  const handleSaveParticipantEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingParticipant) return;
+    setEditParticipantError('');
+
+    try {
+      const updated = await gameService.updateParticipant(editingParticipant.id, {
+        displayName: editPlayerName,
+        playerCode: editPlayerCode,
+        emailOrContact: editPlayerContact,
+      });
+
+      if (updated) {
+        setParticipants((prev) =>
+          prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p))
+        );
+        setEditingParticipant(null);
+        setStatusBanner({ type: 'success', message: 'Participant updated successfully.' });
+        setTimeout(() => setStatusBanner(null), 3000);
+      }
+    } catch (err: any) {
+      setEditParticipantError(err.message || 'Failed to update participant');
+    }
+  };
+
   // Remove Participant Handler
   const handleRemoveParticipant = async (id: string, name: string) => {
     if (confirm(`Remove ${name} from this game?`)) {
@@ -212,14 +258,19 @@ export const AdminDashboard: React.FC = () => {
   // Create Game Handler
   const handleCreateGame = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGameName.trim()) return;
+    setCreateGameError('');
 
     try {
-      const game = await gameService.createGame(newGameName.trim(), newGameDesc.trim(), {
-        min_participants: newGameMin,
-        max_participants: newGameMax,
-        points_correct: newGamePoints,
-      });
+      const game = await gameService.createGame(
+        newGameName.trim(),
+        newGameDesc.trim(),
+        {
+          min_participants: newGameMin,
+          max_participants: newGameMax,
+          points_correct: newGamePoints,
+        },
+        newGameStatus
+      );
       setGames((prev) => [game, ...prev]);
       setSelectedGame(game);
       setShowCreateGame(false);
@@ -228,8 +279,53 @@ export const AdminDashboard: React.FC = () => {
       setStatusBanner({ type: 'success', message: `Game "${game.name}" created successfully!` });
       refreshAllData();
     } catch (err: any) {
-      alert(`Error creating game: ${err.message}`);
+      setCreateGameError(err.message || 'Error creating game');
     }
+  };
+
+  // Edit Game Handler
+  const handleSaveGameEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingGame) return;
+    setEditGameError('');
+
+    try {
+      const updated = await gameService.updateGame(editingGame.id, {
+        name: editGameName.trim(),
+        description: editGameDesc.trim(),
+        settings: {
+          ...editingGame.settings,
+          min_participants: editGameMin,
+          max_participants: editGameMax,
+          points_correct: editGamePoints,
+        },
+      });
+
+      if (updated) {
+        setGames((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
+        if (selectedGame?.id === updated.id) {
+          setSelectedGame(updated);
+        }
+        setEditingGame(null);
+        setStatusBanner({ type: 'success', message: 'Game settings updated successfully.' });
+        setTimeout(() => setStatusBanner(null), 3000);
+      }
+    } catch (err: any) {
+      setEditGameError(err.message || 'Error updating game');
+    }
+  };
+
+  // Update Game Status Handler
+  const handleGameStatusChange = async (gameId: string, status: GameStatus) => {
+    await gameService.updateGameStatus(gameId, status);
+    setGames((prev) =>
+      prev.map((g) => (g.id === gameId ? { ...g, status } : g))
+    );
+    if (selectedGame?.id === gameId) {
+      setSelectedGame((prev) => (prev ? { ...prev, status } : null));
+    }
+    setStatusBanner({ type: 'success', message: `Game status changed to ${status.toUpperCase()}.` });
+    setTimeout(() => setStatusBanner(null), 3000);
   };
 
   // Reveal Answers Handler
@@ -254,6 +350,16 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  // Close Round Manually Handler
+  const handleCloseRound = async () => {
+    if (!selectedGame || !activeRound) return;
+    if (confirm('Close this round manually? No further answers can be submitted.')) {
+      await gameService.closeRoundManually(activeRound.id, selectedGame.id);
+      setStatusBanner({ type: 'success', message: 'Round closed manually.' });
+      refreshAllData();
+    }
+  };
+
   // Topic Toggle Handler
   const handleToggleTopic = async (topicId: string, current: boolean) => {
     await gameService.toggleTopic(topicId, !current);
@@ -265,12 +371,45 @@ export const AdminDashboard: React.FC = () => {
   // Add Custom Topic Handler
   const handleAddTopic = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTopicName.trim()) return;
-    const t = await gameService.addTopic(newTopicName.trim(), newTopicDesc.trim());
-    setTopics((prev) => [...prev, t]);
-    setNewTopicName('');
-    setNewTopicDesc('');
-    setShowAddTopic(false);
+    setTopicError('');
+    try {
+      const t = await gameService.addTopic(newTopicName.trim(), newTopicDesc.trim());
+      setTopics((prev) => [...prev, t]);
+      setNewTopicName('');
+      setNewTopicDesc('');
+      setShowAddTopic(false);
+      setStatusBanner({ type: 'success', message: `Topic "${t.name}" added successfully.` });
+      setTimeout(() => setStatusBanner(null), 3000);
+    } catch (err: any) {
+      setTopicError(err.message || 'Error adding topic');
+    }
+  };
+
+  // Edit Topic Handler
+  const handleSaveTopicEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTopic) return;
+    try {
+      const updated = await gameService.editTopic(editingTopic.id, editTopicName, editTopicDesc);
+      if (updated) {
+        setTopics((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+        setEditingTopic(null);
+        setStatusBanner({ type: 'success', message: 'Topic category updated.' });
+        setTimeout(() => setStatusBanner(null), 3000);
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  // Delete Topic Handler
+  const handleDeleteTopic = async (topicId: string, name: string) => {
+    if (confirm(`Delete topic category "${name}"?`)) {
+      await gameService.deleteTopic(topicId);
+      setTopics((prev) => prev.filter((t) => t.id !== topicId));
+      setStatusBanner({ type: 'success', message: `Topic "${name}" deleted.` });
+      setTimeout(() => setStatusBanner(null), 3000);
+    }
   };
 
   // Export CSV Handler
@@ -299,7 +438,15 @@ export const AdminDashboard: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  // Derived metrics
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+        <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mb-4" />
+        <h3 className="text-base font-bold text-white">Verifying Admin Access...</h3>
+      </div>
+    );
+  }
+
   const joinedCount = participants.filter((p) => p.status !== 'pending').length;
   const pendingParticipantsCount = participants.filter((p) => p.status === 'pending').length;
   const questionsCount = assignments.length;
@@ -308,7 +455,7 @@ export const AdminDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background text-slate-100 flex flex-col">
-      <Navbar isAdmin={true} />
+      <Navbar isAdmin={true} onAdminLogout={() => navigate('/')} />
 
       {/* Top Admin Controls & Game Selector */}
       <section className="border-b border-background-border bg-background-card/50 px-4 sm:px-6 lg:px-8 py-4">
@@ -327,6 +474,8 @@ export const AdminDashboard: React.FC = () => {
                         ? 'success'
                         : selectedGame.status === 'completed'
                         ? 'purple'
+                        : selectedGame.status === 'cancelled'
+                        ? 'danger'
                         : 'warning'
                     }
                     size="sm"
@@ -398,6 +547,7 @@ export const AdminDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto flex items-center gap-1 sm:gap-2 overflow-x-auto py-2 no-scrollbar">
           {[
             { id: 'overview', label: 'Overview', icon: Layers },
+            { id: 'games', label: `Games (${games.length})`, icon: Gamepad2 },
             { id: 'participants', label: `Participants (${participants.length})`, icon: Users },
             { id: 'monitoring', label: `Answer Monitoring (${submittedAnswersCount}/${questionsCount})`, icon: Eye },
             { id: 'leaderboard', label: 'Leaderboard', icon: Trophy },
@@ -497,10 +647,20 @@ export const AdminDashboard: React.FC = () => {
                     ROUND {activeRound?.round_number || 1} STATUS
                   </span>
                   <Badge
-                    variant={activeRound?.status === 'revealed' ? 'purple' : 'success'}
+                    variant={
+                      activeRound?.status === 'revealed'
+                        ? 'purple'
+                        : activeRound?.status === 'closed'
+                        ? 'danger'
+                        : 'success'
+                    }
                     size="sm"
                   >
-                    {activeRound?.status === 'revealed' ? 'REVEALED / CLOSED' : 'ACTIVE ROUND'}
+                    {activeRound?.status === 'revealed'
+                      ? 'REVEALED'
+                      : activeRound?.status === 'closed'
+                      ? 'CLOSED'
+                      : 'ACTIVE ROUND'}
                   </Badge>
                 </div>
                 <h3 className="text-lg font-bold text-white">
@@ -514,13 +674,23 @@ export const AdminDashboard: React.FC = () => {
 
               <div className="flex flex-wrap items-center gap-3">
                 {activeRound?.status !== 'revealed' && (
-                  <button
-                    onClick={handleRevealAll}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm shadow-lg shadow-purple-600/30 transition-all min-h-[44px]"
-                  >
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>REVEAL ALL ANSWERS</span>
-                  </button>
+                  <>
+                    <button
+                      onClick={handleRevealAll}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm shadow-lg shadow-purple-600/30 transition-all min-h-[44px]"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>REVEAL ALL ANSWERS</span>
+                    </button>
+
+                    <button
+                      onClick={handleCloseRound}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-semibold min-h-[44px]"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      <span>Close Round</span>
+                    </button>
+                  </>
                 )}
 
                 <button
@@ -578,7 +748,149 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* =========================================================================
-            TAB 2: PARTICIPANTS MANAGEMENT
+            TAB 2: GAME MANAGEMENT
+        ========================================================================= */}
+        {activeTab === 'games' && (
+          <div className="space-y-6 animate-in fade-in-50">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-white">Game Rooms Management</h2>
+                <p className="text-xs text-slate-400">
+                  Create, configure rules, pause, or transition game room statuses.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowCreateGame(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm min-h-[44px]"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create New Game</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {games.map((g) => (
+                <div
+                  key={g.id}
+                  className={`p-6 rounded-2xl border transition-all ${
+                    selectedGame?.id === g.id
+                      ? 'bg-background-card border-indigo-500 ring-2 ring-indigo-500/20'
+                      : 'bg-background-card border-background-border'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-white">{g.name}</h3>
+                        <Badge
+                          variant={
+                            g.status === 'active'
+                              ? 'success'
+                              : g.status === 'completed'
+                              ? 'purple'
+                              : g.status === 'cancelled'
+                              ? 'danger'
+                              : 'warning'
+                          }
+                          size="sm"
+                        >
+                          {g.status.toUpperCase()}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {g.description || 'No description provided.'}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setEditingGame(g);
+                        setEditGameName(g.name);
+                        setEditGameDesc(g.description || '');
+                        setEditGameMin(g.settings.min_participants);
+                        setEditGameMax(g.settings.max_participants);
+                        setEditGamePoints(g.settings.points_correct);
+                      }}
+                      className="p-2 rounded-lg border border-background-border hover:bg-background-hover text-slate-400 hover:text-white"
+                      title="Edit Game"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 py-3 border-y border-background-border text-center text-xs">
+                    <div>
+                      <span className="text-slate-500 block">Min / Max</span>
+                      <strong className="text-slate-200">
+                        {g.settings.min_participants} / {g.settings.max_participants}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Points</span>
+                      <strong className="text-indigo-400">+{g.settings.points_correct}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Date</span>
+                      <strong className="text-slate-300">{g.game_date}</strong>
+                    </div>
+                  </div>
+
+                  {/* Status Transition Buttons */}
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    {g.status !== 'active' && (
+                      <button
+                        onClick={() => handleGameStatusChange(g.id, 'active')}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold"
+                      >
+                        Start Game
+                      </button>
+                    )}
+                    {g.status === 'active' && (
+                      <button
+                        onClick={() => handleGameStatusChange(g.id, 'waiting_for_answers')}
+                        className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 text-xs font-bold"
+                      >
+                        Pause Game
+                      </button>
+                    )}
+                    {g.status !== 'completed' && (
+                      <button
+                        onClick={() => handleGameStatusChange(g.id, 'completed')}
+                        className="px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400 hover:bg-purple-500/20 text-xs font-bold"
+                      >
+                        Complete
+                      </button>
+                    )}
+                    {g.status !== 'cancelled' && (
+                      <button
+                        onClick={() => handleGameStatusChange(g.id, 'cancelled')}
+                        className="px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 text-xs font-bold"
+                      >
+                        Cancel
+                      </button>
+                    )}
+
+                    {selectedGame?.id !== g.id && (
+                      <button
+                        onClick={() => {
+                          setSelectedGame(g);
+                          refreshAllData();
+                        }}
+                        className="ml-auto text-xs text-indigo-400 font-bold hover:underline"
+                      >
+                        Select as Active Room →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 3: PARTICIPANTS MANAGEMENT
         ========================================================================= */}
         {activeTab === 'participants' && (
           <div className="space-y-6 animate-in fade-in-50">
@@ -645,13 +957,27 @@ export const AdminDashboard: React.FC = () => {
                             </div>
                           </div>
 
-                          <button
-                            onClick={() => handleRemoveParticipant(p.id, p.display_name)}
-                            className="text-slate-500 hover:text-rose-400 transition-colors p-1 rounded-lg"
-                            title="Remove participant"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingParticipant(p);
+                                setEditPlayerName(p.display_name);
+                                setEditPlayerCode(p.player_code);
+                                setEditPlayerContact(p.email_or_contact || '');
+                              }}
+                              className="text-slate-500 hover:text-indigo-400 transition-colors p-1 rounded-lg"
+                              title="Edit participant"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleRemoveParticipant(p.id, p.display_name)}
+                              className="text-slate-500 hover:text-rose-400 transition-colors p-1 rounded-lg"
+                              title="Remove participant"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
 
                         <div className="mb-4">
@@ -693,7 +1019,7 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* =========================================================================
-            TAB 3: ANSWER MONITORING (LIVE REALTIME)
+            TAB 4: ANSWER MONITORING (LIVE REALTIME)
         ========================================================================= */}
         {activeTab === 'monitoring' && (
           <div className="space-y-6 animate-in fade-in-50">
@@ -707,13 +1033,22 @@ export const AdminDashboard: React.FC = () => {
 
               <div className="flex items-center gap-3">
                 {activeRound?.status !== 'revealed' && (
-                  <button
-                    onClick={handleRevealAll}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm shadow-lg shadow-purple-600/30 transition-all min-h-[44px]"
-                  >
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>REVEAL ALL ANSWERS</span>
-                  </button>
+                  <>
+                    <button
+                      onClick={handleRevealAll}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm shadow-lg shadow-purple-600/30 transition-all min-h-[44px]"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>REVEAL ALL ANSWERS</span>
+                    </button>
+                    <button
+                      onClick={handleCloseRound}
+                      className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs font-semibold min-h-[44px]"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      <span>Close Round</span>
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -820,7 +1155,7 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* =========================================================================
-            TAB 4: LEADERBOARD
+            TAB 5: LEADERBOARD
         ========================================================================= */}
         {activeTab === 'leaderboard' && (
           <div className="space-y-8 animate-in fade-in-50">
@@ -939,7 +1274,7 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* =========================================================================
-            TAB 5: TOPICS MANAGEMENT
+            TAB 6: TOPICS MANAGEMENT
         ========================================================================= */}
         {activeTab === 'topics' && (
           <div className="space-y-6 animate-in fade-in-50">
@@ -964,30 +1299,55 @@ export const AdminDashboard: React.FC = () => {
               {topics.map((t) => (
                 <div
                   key={t.id}
-                  className="p-5 rounded-2xl bg-background-card border border-background-border flex items-start justify-between gap-4"
+                  className="p-5 rounded-2xl bg-background-card border border-background-border flex flex-col justify-between gap-4"
                 >
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="text-base font-bold text-white">{t.name}</h4>
-                      <Badge variant={t.is_active ? 'success' : 'neutral'} size="sm">
-                        {t.is_active ? 'Active' : 'Disabled'}
-                      </Badge>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-base font-bold text-white">{t.name}</h4>
+                        <Badge variant={t.is_active ? 'success' : 'neutral'} size="sm">
+                          {t.is_active ? 'Active' : 'Disabled'}
+                        </Badge>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            setEditingTopic(t);
+                            setEditTopicName(t.name);
+                            setEditTopicDesc(t.description || '');
+                          }}
+                          className="p-1 text-slate-500 hover:text-indigo-400 rounded-lg"
+                          title="Edit topic"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTopic(t.id, t.name)}
+                          className="p-1 text-slate-500 hover:text-rose-400 rounded-lg"
+                          title="Delete topic"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                     <p className="text-xs text-slate-400 leading-relaxed">
                       {t.description || 'No description provided.'}
                     </p>
                   </div>
 
-                  <button
-                    onClick={() => handleToggleTopic(t.id, t.is_active)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all min-h-[44px] ${
-                      t.is_active
-                        ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20'
-                        : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20'
-                    }`}
-                  >
-                    {t.is_active ? 'Disable' : 'Enable'}
-                  </button>
+                  <div className="flex items-center justify-end pt-2 border-t border-background-border">
+                    <button
+                      onClick={() => handleToggleTopic(t.id, t.is_active)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all min-h-[38px] ${
+                        t.is_active
+                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20'
+                          : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20'
+                      }`}
+                    >
+                      {t.is_active ? 'Disable' : 'Enable'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -995,7 +1355,7 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* =========================================================================
-            TAB 6: SETTINGS & RULES
+            TAB 7: SETTINGS & RULES
         ========================================================================= */}
         {activeTab === 'settings' && selectedGame && (
           <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in-50">
@@ -1160,15 +1520,94 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {/* =========================================================================
+          MODAL: EDIT PARTICIPANT
+      ========================================================================= */}
+      {editingParticipant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in-50">
+          <div className="bg-background-card border border-background-border w-full max-w-md rounded-2xl p-6 shadow-2xl">
+            <h3 className="text-lg font-bold text-white mb-2">Edit Participant</h3>
+
+            {editParticipantError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
+                {editParticipantError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveParticipantEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                  Display Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editPlayerName}
+                  onChange={(e) => setEditPlayerName(e.target.value)}
+                  className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 min-h-[44px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                  Player Code *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editPlayerCode}
+                  onChange={(e) => setEditPlayerCode(e.target.value)}
+                  className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2.5 text-sm text-white font-mono uppercase focus:outline-none focus:border-indigo-500 min-h-[44px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                  Phone / WhatsApp
+                </label>
+                <input
+                  type="text"
+                  value={editPlayerContact}
+                  onChange={(e) => setEditPlayerContact(e.target.value)}
+                  className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 min-h-[44px]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingParticipant(null)}
+                  className="px-4 py-2.5 rounded-xl border border-background-border text-slate-400 hover:text-white text-xs font-semibold min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 min-h-[44px]"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
           MODAL: CREATE GAME
       ========================================================================= */}
       {showCreateGame && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in-50">
           <div className="bg-background-card border border-background-border w-full max-w-lg rounded-2xl p-6 shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-2">Create New Game</h3>
-            <p className="text-xs text-slate-400 mb-5">
+            <p className="text-xs text-slate-400 mb-4">
               Launch a new Friday Fun challenge room with customized settings.
             </p>
+
+            {createGameError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
+                {createGameError}
+              </div>
+            )}
 
             <form onSubmit={handleCreateGame} className="space-y-4">
               <div>
@@ -1207,20 +1646,49 @@ export const AdminDashboard: React.FC = () => {
                     type="number"
                     min="2"
                     value={newGameMin}
-                    onChange={(e) => setNewGameMin(parseInt(e.target.value))}
-                    className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2 text-sm text-white"
+                    onChange={(e) => setNewGameMin(parseInt(e.target.value) || 2)}
+                    className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2 text-sm text-white min-h-[44px]"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
-                    Points Per Answer
+                    Max Players
+                  </label>
+                  <input
+                    type="number"
+                    min="2"
+                    value={newGameMax}
+                    onChange={(e) => setNewGameMax(parseInt(e.target.value) || 30)}
+                    className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2 text-sm text-white min-h-[44px]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                    Points Per Correct Answer
                   </label>
                   <input
                     type="number"
                     value={newGamePoints}
-                    onChange={(e) => setNewGamePoints(parseInt(e.target.value))}
-                    className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2 text-sm text-white"
+                    onChange={(e) => setNewGamePoints(parseInt(e.target.value) || 10)}
+                    className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2 text-sm text-white min-h-[44px]"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                    Initial Status
+                  </label>
+                  <select
+                    value={newGameStatus}
+                    onChange={(e) => setNewGameStatus(e.target.value as GameStatus)}
+                    className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2 text-sm text-white min-h-[44px]"
+                  >
+                    <option value="registration_open">Registration Open</option>
+                    <option value="draft">Save as Draft</option>
+                    <option value="active">Active Immediately</option>
+                  </select>
                 </div>
               </div>
 
@@ -1236,7 +1704,105 @@ export const AdminDashboard: React.FC = () => {
                   type="submit"
                   className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 min-h-[44px]"
                 >
-                  Start Game
+                  Create Game Room
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: EDIT GAME
+      ========================================================================= */}
+      {editingGame && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in-50">
+          <div className="bg-background-card border border-background-border w-full max-w-lg rounded-2xl p-6 shadow-2xl">
+            <h3 className="text-lg font-bold text-white mb-2">Edit Game Details</h3>
+
+            {editGameError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
+                {editGameError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveGameEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                  Game Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editGameName}
+                  onChange={(e) => setEditGameName(e.target.value)}
+                  className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 min-h-[44px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                  Description
+                </label>
+                <input
+                  type="text"
+                  value={editGameDesc}
+                  onChange={(e) => setEditGameDesc(e.target.value)}
+                  className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 min-h-[44px]"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                    Min Players
+                  </label>
+                  <input
+                    type="number"
+                    min="2"
+                    value={editGameMin}
+                    onChange={(e) => setEditGameMin(parseInt(e.target.value) || 2)}
+                    className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2 text-sm text-white min-h-[44px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                    Max Players
+                  </label>
+                  <input
+                    type="number"
+                    min="2"
+                    value={editGameMax}
+                    onChange={(e) => setEditGameMax(parseInt(e.target.value) || 30)}
+                    className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2 text-sm text-white min-h-[44px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                    Points Correct
+                  </label>
+                  <input
+                    type="number"
+                    value={editGamePoints}
+                    onChange={(e) => setEditGamePoints(parseInt(e.target.value) || 10)}
+                    className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2 text-sm text-white min-h-[44px]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingGame(null)}
+                  className="px-4 py-2.5 rounded-xl border border-background-border text-slate-400 hover:text-white text-xs font-semibold min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 min-h-[44px]"
+                >
+                  Save Game Rules
                 </button>
               </div>
             </form>
@@ -1254,6 +1820,12 @@ export const AdminDashboard: React.FC = () => {
             <p className="text-xs text-slate-400 mb-4">
               Add a new theme category for participants to challenge each other.
             </p>
+
+            {topicError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
+                {topicError}
+              </div>
+            )}
 
             <form onSubmit={handleAddTopic} className="space-y-4">
               <div>
@@ -1296,6 +1868,60 @@ export const AdminDashboard: React.FC = () => {
                   className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 min-h-[44px]"
                 >
                   Add Topic
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: EDIT TOPIC
+      ========================================================================= */}
+      {editingTopic && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in-50">
+          <div className="bg-background-card border border-background-border w-full max-w-md rounded-2xl p-6 shadow-2xl">
+            <h3 className="text-lg font-bold text-white mb-2">Edit Topic Category</h3>
+
+            <form onSubmit={handleSaveTopicEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                  Category Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTopicName}
+                  onChange={(e) => setEditTopicName(e.target.value)}
+                  className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 min-h-[44px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={editTopicDesc}
+                  onChange={(e) => setEditTopicDesc(e.target.value)}
+                  rows={2}
+                  className="w-full bg-background-darker border border-background-border rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingTopic(null)}
+                  className="px-4 py-2.5 rounded-xl border border-background-border text-slate-400 hover:text-white text-xs font-semibold min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 min-h-[44px]"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>

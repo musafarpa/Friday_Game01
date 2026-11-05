@@ -20,3 +20,4 @@ BEGIN
         RAISE NOTICE 'User with email % not found in auth.users. Please sign up or invite user in Supabase Auth first.', v_admin_email;
     END IF;
 END $$;
+

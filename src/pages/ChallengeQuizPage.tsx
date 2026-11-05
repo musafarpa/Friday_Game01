@@ -82,6 +82,7 @@ export const ChallengeQuizPage: React.FC = () => {
 
   // Handle Answer Submission
   const handleSubmitAnswer = async () => {
+    if (submitting || hasAnswered) return;
     if (!selectedOption || !challengeToken) return;
 
     if (!confirm(`Confirm selection: Option ${selectedOption}? Once submitted, you cannot change it.`)) {
@@ -342,3 +343,4 @@ export const ChallengeQuizPage: React.FC = () => {
     </div>
   );
 };
+

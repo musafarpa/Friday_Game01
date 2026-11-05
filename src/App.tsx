@@ -24,8 +24,9 @@ export const App: React.FC = () => {
         {/* Challenge / Quiz Flow */}
         <Route path="/challenge/:challengeToken" element={<ChallengeQuizPage />} />
 
-        {/* Public / Game Leaderboard */}
+        {/* Public / Game Leaderboard & Results */}
         <Route path="/leaderboard/:gameId" element={<LeaderboardPage />} />
+        <Route path="/results/:gameId" element={<LeaderboardPage />} />
 
         {/* Fallback to Home */}
         <Route path="*" element={<Navigate to="/" replace />} />

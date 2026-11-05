@@ -15,3 +15,4 @@
   <circle cx="72" cy="70" r="7" fill="url(#accentGrad)"/>
   <path d="M68 28 L78 38 M78 28 L68 38" stroke="#06b6d4" stroke-width="2.5" stroke-linecap="round"/>
 </svg>
+
