@@ -22,6 +22,7 @@ const STORAGE_PREFIX = 'friday_fun_2026_';
 
 function getLocal<T>(key: string, defaultValue: T): T {
   try {
+    if (typeof localStorage === 'undefined') return defaultValue;
     const val = localStorage.getItem(STORAGE_PREFIX + key);
     return val ? JSON.parse(val) : defaultValue;
   } catch {
@@ -31,6 +32,7 @@ function getLocal<T>(key: string, defaultValue: T): T {
 
 function setLocal<T>(key: string, value: T): void {
   try {
+    if (typeof localStorage === 'undefined') return;
     localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
   } catch (e) {
     console.error('LocalStorage write error:', e);

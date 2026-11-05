@@ -330,7 +330,7 @@ create or replace function public.create_challenge_assignment(
     p_option_d text,
     p_correct_option text,
     p_explanation text,
-    p_difficulty text
+    p_difficulty text default 'medium'
 )
 returns jsonb language plpgsql security definer as $$
 declare

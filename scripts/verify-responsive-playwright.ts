@@ -93,3 +93,8 @@ export async function runPlaywrightVerification() {
   console.log('================================================================\n');
   return true;
 }
+
+runPlaywrightVerification().catch((err) => {
+  console.error('Playwright verification failed:', err);
+  process.exit(1);
+});
