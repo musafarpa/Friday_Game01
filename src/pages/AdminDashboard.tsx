@@ -24,6 +24,10 @@ import {
   XCircle,
   Share2,
   Database,
+  Lock,
+  Check,
+  AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { Badge } from '../components/Badge';
@@ -40,6 +44,7 @@ import {
   Assignment,
   Score,
   GameRound,
+  GameTopicProgress,
 } from '../types';
 import {
   buildInvitationUrl,
@@ -95,7 +100,13 @@ export const AdminDashboard: React.FC = () => {
   const [newGameMax, setNewGameMax] = useState(30);
   const [newGamePoints, setNewGamePoints] = useState(10);
   const [newGameStatus, setNewGameStatus] = useState<GameStatus>('registration_open');
+  const [selectedCreateTopics, setSelectedCreateTopics] = useState<string[]>([]);
   const [createGameError, setCreateGameError] = useState('');
+  const [isGeneratingPool, setIsGeneratingPool] = useState(false);
+
+  // Topic Question Pools Progress (Minimum 7 Questions per Topic)
+  const [topicProgress, setTopicProgress] = useState<GameTopicProgress[]>([]);
+  const [retryingTopicId, setRetryingTopicId] = useState<string | null>(null);
 
   // Edit Game state
   const [editingGame, setEditingGame] = useState<Game | null>(null);
@@ -159,18 +170,29 @@ export const AdminDashboard: React.FC = () => {
       }
 
       if (current) {
-        const [parts, round, topList, assigns, lboard] = await Promise.all([
+        const [parts, round, topList, assigns, lboard, progress] = await Promise.all([
           gameService.getParticipants(current.id),
           gameService.getActiveRound(current.id),
           gameService.getAllTopics(),
           gameService.getLiveAssignments(current.id),
           gameService.getLeaderboard(current.id),
+          gameService.getGameTopicProgress(current.id),
         ]);
         setParticipants(parts);
         setActiveRound(round);
         setTopics(topList);
         setAssignments(assigns);
         setLeaderboard(lboard);
+        setTopicProgress(progress);
+        setSelectedCreateTopics((prev) =>
+          prev.length === 0 ? topList.filter((t) => t.is_active).map((t) => t.id) : prev
+        );
+      } else {
+        const topList = await gameService.getAllTopics();
+        setTopics(topList);
+        setSelectedCreateTopics((prev) =>
+          prev.length === 0 ? topList.filter((t) => t.is_active).map((t) => t.id) : prev
+        );
       }
     } catch (err: any) {
       console.error('Failed to load dashboard data:', err);
@@ -274,7 +296,13 @@ export const AdminDashboard: React.FC = () => {
     e.preventDefault();
     setCreateGameError('');
 
+    if (selectedCreateTopics.length === 0) {
+      setCreateGameError('Please select at least 1 topic category for this game.');
+      return;
+    }
+
     try {
+      setIsGeneratingPool(true);
       const game = await gameService.createGame(
         newGameName.trim(),
         newGameDesc.trim(),
@@ -282,18 +310,90 @@ export const AdminDashboard: React.FC = () => {
           min_participants: newGameMin,
           max_participants: newGameMax,
           points_correct: newGamePoints,
+          selected_topics: selectedCreateTopics,
+          min_questions_per_topic: 7,
         },
-        newGameStatus
+        newGameStatus,
+        selectedCreateTopics
       );
+
+      // Auto-generate minimum 7 questions per selected topic
+      await gameService.generateQuestionPoolForGame(game.id, selectedCreateTopics, 7);
+
       setGames((prev) => [game, ...prev]);
       setSelectedGame(game);
       setShowCreateGame(false);
       setNewGameName('');
       setNewGameDesc('');
-      setStatusBanner({ type: 'success', message: `Game "${game.name}" created successfully!` });
+      setStatusBanner({
+        type: 'success',
+        message: `Game "${game.name}" created! 7 verified questions generated per topic (${selectedCreateTopics.length * 7} questions ready).`,
+      });
       refreshAllData();
     } catch (err: any) {
       setCreateGameError(err.message || 'Error creating game');
+    } finally {
+      setIsGeneratingPool(false);
+    }
+  };
+
+  // Retry Topic Generation Handler
+  const handleRetryTopic = async (topicId: string) => {
+    if (!selectedGame) return;
+    try {
+      setRetryingTopicId(topicId);
+      const updatedProgress = await gameService.retryTopicQuestionGeneration(
+        selectedGame.id,
+        topicId
+      );
+      setTopicProgress((prev) =>
+        prev.map((p) => (p.topic_id === topicId ? updatedProgress : p))
+      );
+      setStatusBanner({
+        type: 'success',
+        message: `Regenerated questions for "${updatedProgress.topic_name}": ${updatedProgress.current_count}/${updatedProgress.required_count} ready.`,
+      });
+      setTimeout(() => setStatusBanner(null), 4000);
+      refreshAllData();
+    } catch (err: any) {
+      setStatusBanner({
+        type: 'error',
+        message: err.message || 'Failed to retry topic generation.',
+      });
+    } finally {
+      setRetryingTopicId(null);
+    }
+  };
+
+  // Top Up / Regenerate All Topics Handler
+  const handleRegenerateAllTopics = async () => {
+    if (!selectedGame) return;
+    try {
+      setIsGeneratingPool(true);
+      const res = await gameService.generateQuestionPoolForGame(
+        selectedGame.id,
+        undefined,
+        7,
+        (p) => {
+          setTopicProgress(p);
+        }
+      );
+      setTopicProgress(res.progress);
+      setStatusBanner({
+        type: res.success ? 'success' : 'error',
+        message: res.success
+          ? 'All topics successfully populated with at least 7 verified questions!'
+          : 'Some topics are still incomplete. Click retry on individual topics.',
+      });
+      setTimeout(() => setStatusBanner(null), 4000);
+      refreshAllData();
+    } catch (err: any) {
+      setStatusBanner({
+        type: 'error',
+        message: err.message || 'Failed to populate question pools.',
+      });
+    } finally {
+      setIsGeneratingPool(false);
     }
   };
 
@@ -331,15 +431,23 @@ export const AdminDashboard: React.FC = () => {
 
   // Update Game Status Handler
   const handleGameStatusChange = async (gameId: string, status: GameStatus) => {
-    await gameService.updateGameStatus(gameId, status);
-    setGames((prev) =>
-      prev.map((g) => (g.id === gameId ? { ...g, status } : g))
-    );
-    if (selectedGame?.id === gameId) {
-      setSelectedGame((prev) => (prev ? { ...prev, status } : null));
+    try {
+      await gameService.updateGameStatus(gameId, status);
+      setGames((prev) =>
+        prev.map((g) => (g.id === gameId ? { ...g, status } : g))
+      );
+      if (selectedGame?.id === gameId) {
+        setSelectedGame((prev) => (prev ? { ...prev, status } : null));
+      }
+      setStatusBanner({ type: 'success', message: `Game status changed to ${status.toUpperCase()}.` });
+      setTimeout(() => setStatusBanner(null), 3000);
+    } catch (err: any) {
+      setStatusBanner({
+        type: 'error',
+        message: err.message || 'Failed to update game status.',
+      });
+      setTimeout(() => setStatusBanner(null), 6000);
     }
-    setStatusBanner({ type: 'success', message: `Game status changed to ${status.toUpperCase()}.` });
-    setTimeout(() => setStatusBanner(null), 3000);
   };
 
   // Delete Game Room Handler
@@ -778,6 +886,130 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
+            {/* =========================================================================
+                TOPIC QUESTION MATRIX & MINIMUM 7 QUESTIONS REQUIREMENT
+            ========================================================================= */}
+            <div className="rounded-2xl bg-background-card border border-background-border p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-background-border">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-indigo-400" />
+                      Topic Question Pools (Minimum 7 Questions Per Topic)
+                    </h3>
+                    <Badge
+                      variant={
+                        topicProgress.length > 0 &&
+                        topicProgress.every((t) => t.status === 'complete' || t.current_count >= t.required_count)
+                          ? 'success'
+                          : 'warning'
+                      }
+                      size="sm"
+                    >
+                      {topicProgress.length > 0 &&
+                      topicProgress.every((t) => t.status === 'complete' || t.current_count >= t.required_count)
+                        ? 'ALL TOPICS READY'
+                        : `${
+                            topicProgress.filter(
+                              (t) => t.status === 'complete' || t.current_count >= t.required_count
+                            ).length
+                          }/${topicProgress.length} TOPICS READY`}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Every selected topic must generate at least 7 verified questions (3 Easy, 3 Medium, 1 Hard) with 4 distinct options, 1 correct, and factual explanation.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRegenerateAllTopics}
+                    disabled={isGeneratingPool || !selectedGame}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 text-xs font-bold transition-all min-h-[40px] disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingPool ? 'animate-spin' : ''}`} />
+                    <span>{isGeneratingPool ? 'Generating Pools...' : 'Regenerate / Top Up All'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {topicProgress.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-sm">
+                  No topics configured for this room. {selectedGame ? 'Configure topics to generate questions.' : 'Select or create a game room.'}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {topicProgress.map((tp) => {
+                    const isComplete = tp.status === 'complete' || tp.current_count >= tp.required_count;
+                    const percent = Math.min(100, Math.round((tp.current_count / tp.required_count) * 100));
+                    const isRetrying = retryingTopicId === tp.topic_id;
+
+                    return (
+                      <div
+                        key={tp.topic_id}
+                        className={`p-4 rounded-xl border flex flex-col justify-between transition-all ${
+                          isComplete
+                            ? 'bg-emerald-950/10 border-emerald-500/25 hover:border-emerald-500/40'
+                            : 'bg-amber-950/10 border-amber-500/25 hover:border-amber-500/40'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="text-sm font-bold text-white truncate">{tp.topic_name}</span>
+                            <Badge variant={isComplete ? 'success' : 'warning'} size="sm">
+                              {isComplete ? 'COMPLETE' : `${tp.current_count}/${tp.required_count}`}
+                            </Badge>
+                          </div>
+
+                          {/* Progress Bar */}
+                          <div className="w-full bg-background-darker rounded-full h-2 mb-2.5 overflow-hidden border border-background-border">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                isComplete ? 'bg-emerald-500' : 'bg-amber-500'
+                              }`}
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+
+                          {/* Difficulty Breakdown Badges */}
+                          <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+                            <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                              Easy: {tp.difficulty_counts.easy}/3
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
+                              Med: {tp.difficulty_counts.medium}/3
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-medium">
+                              Hard: {tp.difficulty_counts.hard}/1
+                            </span>
+                          </div>
+                        </div>
+
+                        {!isComplete && (
+                          <div className="mt-3 pt-2.5 border-t border-background-border flex items-center justify-between">
+                            <span className="text-[11px] text-amber-300 flex items-center gap-1">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              Need {Math.max(0, tp.required_count - tp.current_count)} more
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRetryTopic(tp.topic_id)}
+                              disabled={isRetrying}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 text-xs font-semibold flex items-center gap-1 border border-indigo-500/30 disabled:opacity-50"
+                            >
+                              <RefreshCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
+                              <span>{isRetrying ? 'Retrying...' : 'Retry'}</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Participant Quick Table */}
             <div className="rounded-2xl bg-background-card border border-background-border p-6">
               <div className="flex items-center justify-between mb-4">
@@ -935,14 +1167,52 @@ export const AdminDashboard: React.FC = () => {
 
                   {/* Status Transition Buttons */}
                   <div className="mt-4 flex flex-wrap items-center gap-2">
-                    {g.status !== 'active' && (
-                      <button
-                        onClick={() => handleGameStatusChange(g.id, 'active')}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold"
-                      >
-                        Start Game
-                      </button>
-                    )}
+                    {(() => {
+                      const gamePool = g.settings?.topics_question_pool || {};
+                      const gameTopicIds = g.settings?.selected_topics || Object.keys(gamePool);
+                      const hasConfiguredTopics = gameTopicIds.length > 0;
+                      const isGameReady =
+                        hasConfiguredTopics &&
+                        gameTopicIds.every((tid) => {
+                          const entry = gamePool[tid];
+                          return (
+                            entry &&
+                            (entry.questions?.length || 0) >=
+                              (g.settings?.min_questions_per_topic ?? 7)
+                          );
+                        });
+
+                      return (
+                        <>
+                          {g.status !== 'active' && (
+                            isGameReady ? (
+                              <button
+                                onClick={() => handleGameStatusChange(g.id, 'active')}
+                                className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold"
+                              >
+                                Start Game
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedGame(g);
+                                  setStatusBanner({
+                                    type: 'error',
+                                    message: `Room "${g.name}" activation locked: Every selected topic requires at least 7 verified questions. See the Topic Question Pools section to generate questions.`,
+                                  });
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-amber-400 hover:bg-slate-700/60 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                                title="Locked: Minimum 7 questions per topic required before activation"
+                              >
+                                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Start Game (Locked: Needs 7 Qs/Topic)</span>
+                              </button>
+                            )
+                          )}
+                        </>
+                      );
+                    })()}
                     {g.status === 'active' && (
                       <button
                         onClick={() => handleGameStatusChange(g.id, 'waiting_for_answers')}
@@ -1743,6 +2013,75 @@ export const AdminDashboard: React.FC = () => {
                 />
               </div>
 
+              {/* Multi-Topic Selection with Live Requirement Calculation */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold uppercase text-slate-400">
+                    Select Topics for this Game *
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCreateTopics(topics.map((t) => t.id))}
+                      className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-slate-600">•</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCreateTopics([])}
+                      className="text-[11px] text-slate-400 hover:text-slate-300 font-semibold cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2.5 bg-background-darker border border-background-border rounded-xl">
+                  {topics.map((t) => {
+                    const isSelected = selectedCreateTopics.includes(t.id);
+                    return (
+                      <label
+                        key={t.id}
+                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer text-xs transition-colors border ${
+                          isSelected
+                            ? 'bg-indigo-600/15 border-indigo-500/40 text-white font-semibold'
+                            : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-background-hover'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedCreateTopics((prev) => [...prev, t.id]);
+                            } else {
+                              setSelectedCreateTopics((prev) => prev.filter((id) => id !== t.id));
+                            }
+                          }}
+                          className="rounded border-slate-700 text-indigo-600 focus:ring-0 bg-background-card"
+                        />
+                        <span className="truncate">{t.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                {/* Real-Time Requirement Calculator */}
+                <div className="mt-2.5 p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/20 text-xs">
+                  <div className="flex items-center justify-between text-indigo-300 font-bold mb-1">
+                    <span>Minimum 7 Questions Rule:</span>
+                    <span className="text-white font-mono bg-indigo-600/40 px-2 py-0.5 rounded-md border border-indigo-500/30">
+                      {selectedCreateTopics.length} Topics × 7 = {selectedCreateTopics.length * 7} Questions
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Each topic generates at least 7 verified questions (3 Easy, 3 Medium, 1 Hard) with 4 distinct options and no duplicates.
+                  </p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
@@ -1808,9 +2147,11 @@ export const AdminDashboard: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 min-h-[44px]"
+                  disabled={isGeneratingPool}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 min-h-[44px] flex items-center gap-2 disabled:opacity-50"
                 >
-                  Create Game Room
+                  {isGeneratingPool && <RefreshCw className="w-4 h-4 animate-spin" />}
+                  <span>{isGeneratingPool ? 'Generating Questions...' : 'Create Game Room'}</span>
                 </button>
               </div>
             </form>

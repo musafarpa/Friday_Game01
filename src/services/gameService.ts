@@ -1,6 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { generateSecureToken, hashToken } from '../lib/crypto';
-import { generateQuestionForTopic } from './questionGenerator';
+import { generateQuestionForTopic, generateQuestionSetForTopic } from './questionGenerator';
 import {
   Game,
   GameSettings,
@@ -12,6 +12,8 @@ import {
   Question,
   Answer,
   Score,
+  PoolQuestion,
+  GameTopicProgress,
 } from '../types';
 
 // ============================================================================
@@ -273,7 +275,13 @@ export const gameService = {
     return games.find((g) => g.id === gameId) || null;
   },
 
-  async createGame(name: string, description: string, settings: Partial<GameSettings>, initialStatus: GameStatus = 'registration_open'): Promise<Game> {
+  async createGame(
+    name: string,
+    description: string,
+    settings: Partial<GameSettings>,
+    initialStatus: GameStatus = 'registration_open',
+    selectedTopicIds?: string[]
+  ): Promise<Game> {
     const cleanName = name.trim();
     if (!cleanName) {
       throw new Error('Game name cannot be empty.');
@@ -289,6 +297,8 @@ export const gameService = {
       throw new Error('Maximum participants cannot be less than minimum participants.');
     }
 
+    const targetTopicIds = selectedTopicIds || settings.selected_topics || [];
+
     const fullSettings: GameSettings = {
       min_participants: minPart,
       max_participants: maxPart,
@@ -298,6 +308,9 @@ export const gameService = {
       difficulty_distribution: settings.difficulty_distribution ?? { easy: 40, medium: 40, hard: 20 },
       reveal_mode: settings.reveal_mode ?? 'admin_manual_or_all',
       allow_multiple_incoming: settings.allow_multiple_incoming ?? true,
+      min_questions_per_topic: settings.min_questions_per_topic ?? 7,
+      selected_topics: targetTopicIds,
+      topics_question_pool: settings.topics_question_pool || {},
       ...settings,
     };
 
@@ -318,6 +331,20 @@ export const gameService = {
 
       if (error) {
         throw new Error(`Failed to create game in Supabase: ${error.message}`);
+      }
+
+      // Record selected topics in game_topics
+      if (targetTopicIds.length > 0) {
+        try {
+          await supabase.from('game_topics').insert(
+            targetTopicIds.map((tid) => ({
+              game_id: newGame.id,
+              topic_id: tid,
+            }))
+          );
+        } catch (e) {
+          console.warn('Notice: game_topics insert error:', e);
+        }
       }
 
       // Create initial Round 1
@@ -408,6 +435,16 @@ export const gameService = {
   },
 
   async updateGameStatus(gameId: string, status: GameStatus): Promise<void> {
+    if (status === 'active' || status === 'waiting_for_answers') {
+      const readiness = await this.checkGameReadyToStart(gameId);
+      if (!readiness.ready) {
+        throw new Error(
+          readiness.reason ||
+            'Cannot start game: All selected topics must have at least 7 verified questions.'
+        );
+      }
+    }
+
     if (isSupabaseConfigured) {
       const { error } = await supabase
         .from('games')
@@ -507,6 +544,392 @@ export const gameService = {
       topic.is_active = isActive;
       setLocal('topics', topics);
     }
+  },
+
+  // --- Game Topics & Question Pool Management (Minimum 7 Questions Per Topic) ---
+  async setGameTopics(gameId: string, topicIds: string[]): Promise<void> {
+    const game = await this.getGame(gameId);
+    if (!game) throw new Error(`Game ${gameId} not found.`);
+
+    const updatedSettings: GameSettings = {
+      ...game.settings,
+      selected_topics: topicIds,
+    };
+    await this.updateGame(gameId, { settings: updatedSettings });
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('game_topics').delete().eq('game_id', gameId);
+        if (topicIds.length > 0) {
+          await supabase.from('game_topics').insert(
+            topicIds.map((tid) => ({
+              game_id: gameId,
+              topic_id: tid,
+            }))
+          );
+        }
+      } catch (err) {
+        console.warn('game_topics sync warning:', err);
+      }
+    }
+  },
+
+  async getGameTopics(gameId: string): Promise<Topic[]> {
+    const allTopics = await this.getAllTopics();
+    const game = await this.getGame(gameId);
+    if (!game) return allTopics.filter((t) => t.is_active);
+
+    const selectedIds = game.settings?.selected_topics;
+    if (selectedIds && Array.isArray(selectedIds) && selectedIds.length > 0) {
+      return allTopics.filter((t) => selectedIds.includes(t.id));
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data } = await supabase.from('game_topics').select('topic_id').eq('game_id', gameId);
+        if (data && data.length > 0) {
+          const ids = data.map((d: any) => d.topic_id);
+          return allTopics.filter((t) => ids.includes(t.id));
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
+    return allTopics.filter((t) => t.is_active);
+  },
+
+  async generateQuestionPoolForGame(
+    gameId: string,
+    topicIds?: string[],
+    countPerTopic: number = 7,
+    onProgress?: (progress: GameTopicProgress[]) => void
+  ): Promise<{ success: boolean; progress: GameTopicProgress[] }> {
+    const game = await this.getGame(gameId);
+    if (!game) throw new Error(`Game ${gameId} not found.`);
+
+    const allTopics = await this.getAllTopics();
+    let targetTopicIds = topicIds || game.settings?.selected_topics || [];
+    if (targetTopicIds.length === 0) {
+      targetTopicIds = allTopics.filter((t) => t.is_active).map((t) => t.id);
+    }
+
+    const selectedTopics = allTopics.filter((t) => targetTopicIds.includes(t.id));
+    if (selectedTopics.length === 0) {
+      throw new Error('No valid topics selected for this game.');
+    }
+
+    const pool: Record<
+      string,
+      {
+        topic_id?: string;
+        topic_name: string;
+        questions: PoolQuestion[];
+        status: 'pending' | 'generating' | 'complete' | 'incomplete' | 'failed';
+        error?: string;
+      }
+    > = { ...(game.settings?.topics_question_pool || {}) };
+
+    const progressList: GameTopicProgress[] = selectedTopics.map((t) => {
+      const existing = pool[t.id];
+      const qCount = existing?.questions?.length || 0;
+      return {
+        topic_id: t.id,
+        topic_name: t.name,
+        required_count: countPerTopic,
+        current_count: qCount,
+        status: qCount >= countPerTopic ? 'complete' : 'pending',
+        difficulty_counts: {
+          easy: existing?.questions?.filter((q) => q.difficulty === 'easy').length || 0,
+          medium: existing?.questions?.filter((q) => q.difficulty === 'medium').length || 0,
+          hard: existing?.questions?.filter((q) => q.difficulty === 'hard').length || 0,
+        },
+      };
+    });
+
+    if (onProgress) onProgress([...progressList]);
+
+    for (let i = 0; i < selectedTopics.length; i++) {
+      const t = selectedTopics[i];
+      progressList[i].status = 'generating';
+      if (onProgress) onProgress([...progressList]);
+
+      try {
+        const existingQuestions = pool[t.id]?.questions || [];
+        const excludeTexts = existingQuestions.map((q) => q.question_text);
+        const neededCount = Math.max(0, countPerTopic - existingQuestions.length);
+        let newQuestions: PoolQuestion[] = [];
+
+        if (neededCount > 0) {
+          const currentEasy = existingQuestions.filter((q) => q.difficulty === 'easy').length;
+          const currentMed = existingQuestions.filter((q) => q.difficulty === 'medium').length;
+          const currentHard = existingQuestions.filter((q) => q.difficulty === 'hard').length;
+
+          const genDistribution = {
+            easy: Math.max(0, 3 - currentEasy),
+            medium: Math.max(0, 3 - currentMed),
+            hard: Math.max(0, 1 - currentHard),
+          };
+
+          const generated = await generateQuestionSetForTopic(
+            t.name,
+            neededCount,
+            genDistribution,
+            excludeTexts
+          );
+
+          newQuestions = generated.map((g) => ({
+            topic_id: t.id,
+            topic_category: t.name,
+            question_text: g.question,
+            option_a: g.option_a,
+            option_b: g.option_b,
+            option_c: g.option_c,
+            option_d: g.option_d,
+            correct_option: g.correct_option,
+            explanation: g.explanation,
+            difficulty: g.difficulty,
+            is_used: false,
+            source: g.source,
+            created_at: new Date().toISOString(),
+          }));
+        }
+
+        const combinedQuestions = [...existingQuestions, ...newQuestions];
+        const isComplete = combinedQuestions.length >= countPerTopic;
+        pool[t.id] = {
+          topic_id: t.id,
+          topic_name: t.name,
+          questions: combinedQuestions,
+          status: isComplete ? 'complete' : 'incomplete',
+        };
+
+        // Try RPC to save in Supabase questions table if available
+        if (isSupabaseConfigured) {
+          for (const q of newQuestions) {
+            try {
+              await supabase.rpc('save_game_question', {
+                p_game_id: gameId,
+                p_topic_id: t.id,
+                p_topic_category: t.name,
+                p_question_text: q.question_text,
+                p_option_a: q.option_a,
+                p_option_b: q.option_b,
+                p_option_c: q.option_c,
+                p_option_d: q.option_d,
+                p_correct_option: q.correct_option,
+                p_explanation: q.explanation,
+                p_difficulty: q.difficulty,
+              });
+            } catch {
+              // Graceful RPC fallback
+            }
+          }
+        }
+
+        progressList[i].current_count = combinedQuestions.length;
+        progressList[i].status = isComplete ? 'complete' : 'incomplete';
+        progressList[i].difficulty_counts = {
+          easy: combinedQuestions.filter((q) => q.difficulty === 'easy').length,
+          medium: combinedQuestions.filter((q) => q.difficulty === 'medium').length,
+          hard: combinedQuestions.filter((q) => q.difficulty === 'hard').length,
+        };
+      } catch (err: any) {
+        progressList[i].status = 'failed';
+        progressList[i].error = err.message || 'Generation failed';
+        pool[t.id] = {
+          topic_id: t.id,
+          topic_name: t.name,
+          questions: pool[t.id]?.questions || [],
+          status: 'failed',
+          error: err.message,
+        };
+      }
+
+      if (onProgress) onProgress([...progressList]);
+    }
+
+    const updatedSettings: GameSettings = {
+      ...game.settings,
+      min_questions_per_topic: countPerTopic,
+      selected_topics: targetTopicIds,
+      topics_question_pool: pool,
+    };
+    await this.updateGame(gameId, { settings: updatedSettings });
+
+    const allComplete = progressList.every(
+      (p) => p.current_count >= countPerTopic && p.status === 'complete'
+    );
+    return {
+      success: allComplete,
+      progress: progressList,
+    };
+  },
+
+  async getGameTopicProgress(gameId: string): Promise<GameTopicProgress[]> {
+    const game = await this.getGame(gameId);
+    if (!game) return [];
+
+    const allTopics = await this.getAllTopics();
+    let selectedTopicIds = game.settings?.selected_topics;
+    if (!selectedTopicIds || selectedTopicIds.length === 0) {
+      selectedTopicIds = allTopics.filter((t) => t.is_active).map((t) => t.id);
+    }
+
+    const selectedTopics = allTopics.filter((t) => selectedTopicIds!.includes(t.id));
+    const pool = game.settings?.topics_question_pool || {};
+    const requiredCount = game.settings?.min_questions_per_topic ?? 7;
+
+    return selectedTopics.map((t) => {
+      const entry = pool[t.id];
+      const questions = entry?.questions || [];
+      const count = questions.length;
+      let status: 'pending' | 'generating' | 'complete' | 'incomplete' | 'failed' = entry?.status || 'pending';
+      if (count >= requiredCount) {
+        status = 'complete';
+      } else if (count > 0 && status !== 'failed') {
+        status = 'incomplete';
+      }
+
+      return {
+        topic_id: t.id,
+        topic_name: t.name,
+        required_count: requiredCount,
+        current_count: count,
+        status,
+        difficulty_counts: {
+          easy: questions.filter((q) => q.difficulty === 'easy').length,
+          medium: questions.filter((q) => q.difficulty === 'medium').length,
+          hard: questions.filter((q) => q.difficulty === 'hard').length,
+        },
+        error: entry?.error,
+      };
+    });
+  },
+
+  async retryTopicQuestionGeneration(gameId: string, topicId: string): Promise<GameTopicProgress> {
+    const game = await this.getGame(gameId);
+    if (!game) throw new Error(`Game ${gameId} not found.`);
+
+    const allTopics = await this.getAllTopics();
+    const topic = allTopics.find((t) => t.id === topicId);
+    if (!topic) throw new Error(`Topic ${topicId} not found.`);
+
+    const pool = { ...(game.settings?.topics_question_pool || {}) };
+    const existingQuestions = pool[topicId]?.questions || [];
+    const requiredCount = game.settings?.min_questions_per_topic ?? 7;
+
+    const currentEasy = existingQuestions.filter((q) => q.difficulty === 'easy').length;
+    const currentMed = existingQuestions.filter((q) => q.difficulty === 'medium').length;
+    const currentHard = existingQuestions.filter((q) => q.difficulty === 'hard').length;
+
+    const neededCount = Math.max(0, requiredCount - existingQuestions.length);
+    const genDistribution = {
+      easy: Math.max(0, 3 - currentEasy),
+      medium: Math.max(0, 3 - currentMed),
+      hard: Math.max(0, 1 - currentHard),
+    };
+
+    const excludeTexts = existingQuestions.map((q) => q.question_text);
+
+    const generated = await generateQuestionSetForTopic(
+      topic.name,
+      neededCount > 0 ? neededCount : requiredCount,
+      genDistribution,
+      excludeTexts
+    );
+
+    const newQuestions: PoolQuestion[] = generated.map((g) => ({
+      topic_id: topic.id,
+      topic_category: topic.name,
+      question_text: g.question,
+      option_a: g.option_a,
+      option_b: g.option_b,
+      option_c: g.option_c,
+      option_d: g.option_d,
+      correct_option: g.correct_option,
+      explanation: g.explanation,
+      difficulty: g.difficulty,
+      is_used: false,
+      source: g.source,
+      created_at: new Date().toISOString(),
+    }));
+
+    const combined = [...existingQuestions, ...newQuestions];
+    pool[topicId] = {
+      topic_id: topic.id,
+      topic_name: topic.name,
+      questions: combined,
+      status: combined.length >= requiredCount ? 'complete' : 'incomplete',
+    };
+
+    const updatedSettings: GameSettings = {
+      ...game.settings,
+      topics_question_pool: pool,
+    };
+    await this.updateGame(gameId, { settings: updatedSettings });
+
+    return {
+      topic_id: topic.id,
+      topic_name: topic.name,
+      required_count: requiredCount,
+      current_count: combined.length,
+      status: combined.length >= requiredCount ? 'complete' : 'incomplete',
+      difficulty_counts: {
+        easy: combined.filter((q) => q.difficulty === 'easy').length,
+        medium: combined.filter((q) => q.difficulty === 'medium').length,
+        hard: combined.filter((q) => q.difficulty === 'hard').length,
+      },
+    };
+  },
+
+  async checkGameReadyToStart(
+    gameId: string
+  ): Promise<{ ready: boolean; reason?: string; progress: GameTopicProgress[] }> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('check_game_ready_to_start', {
+          p_game_id: gameId,
+        });
+        if (!rpcErr && rpcData && typeof rpcData.ready === 'boolean') {
+          const progress = await this.getGameTopicProgress(gameId);
+          return {
+            ready: rpcData.ready,
+            reason: rpcData.ready
+              ? undefined
+              : `Incomplete topics: ${(rpcData.incomplete_topics || []).join(', ')}. Each topic requires at least 7 questions.`,
+            progress,
+          };
+        }
+      } catch {
+        // Fallback to pool inspection
+      }
+    }
+
+    const progress = await this.getGameTopicProgress(gameId);
+    if (progress.length === 0) {
+      return {
+        ready: false,
+        reason: 'No topics have been configured for this game room.',
+        progress,
+      };
+    }
+
+    const incomplete = progress.filter((p) => p.current_count < p.required_count);
+    if (incomplete.length > 0) {
+      return {
+        ready: false,
+        reason: `Cannot start game: ${incomplete.length} topic(s) (${incomplete
+          .map((i) => `${i.topic_name}: ${i.current_count}/${i.required_count}`)
+          .join(', ')}) do not have the required minimum 7 questions.`,
+        progress,
+      };
+    }
+
+    return {
+      ready: true,
+      progress,
+    };
   },
 
   async addTopic(name: string, description: string, icon: string = 'Sparkles'): Promise<Topic> {
@@ -878,8 +1301,45 @@ export const gameService = {
       throw new Error('Self-selection is not permitted. You must challenge another player.');
     }
 
-    // 1. Generate Question via AI or verified Question Bank
-    const generatedQ = await generateQuestionForTopic(topicName, difficulty);
+    // 1. Check if the game has a pre-generated question pool for this topic
+    let selectedQuestion: any = null;
+    try {
+      const game = await this.getGame(gameId);
+      if (game?.settings?.topics_question_pool) {
+        const poolEntry =
+          game.settings.topics_question_pool[topicId] ||
+          Object.values(game.settings.topics_question_pool).find(
+            (p) => p.topic_name.toLowerCase().trim() === topicName.toLowerCase().trim()
+          );
+
+        if (poolEntry && poolEntry.questions && poolEntry.questions.length > 0) {
+          const unused = poolEntry.questions.find((q) => !q.is_used);
+          if (unused) {
+            selectedQuestion = unused;
+            unused.is_used = true;
+            // Update the pool status in game settings
+            await this.updateGame(gameId, { settings: game.settings });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Notice: Error fetching pool question, falling back to generator:', e);
+    }
+
+    const generatedQ = selectedQuestion
+      ? {
+          topic: selectedQuestion.topic_category,
+          question: selectedQuestion.question_text,
+          option_a: selectedQuestion.option_a,
+          option_b: selectedQuestion.option_b,
+          option_c: selectedQuestion.option_c,
+          option_d: selectedQuestion.option_d,
+          correct_option: selectedQuestion.correct_option,
+          explanation: selectedQuestion.explanation,
+          difficulty: selectedQuestion.difficulty,
+          source: selectedQuestion.source || 'game-pool',
+        }
+      : await generateQuestionForTopic(topicName, difficulty);
 
     // 2. Generate secure challenge token and hash
     const rawChallengeToken = generateSecureToken(24);

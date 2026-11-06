@@ -29,6 +29,18 @@ export interface GameSettings {
   reveal_mode: string;
   allow_multiple_incoming: boolean;
   submission_deadline?: string;
+  min_questions_per_topic?: number; // Minimum 7 questions per topic requirement
+  selected_topics?: string[]; // IDs of topics selected for this game
+  topics_question_pool?: Record<
+    string,
+    {
+      topic_id?: string;
+      topic_name: string;
+      questions: PoolQuestion[];
+      status: 'pending' | 'generating' | 'complete' | 'incomplete' | 'failed';
+      error?: string;
+    }
+  >;
 }
 
 export interface Game {
@@ -79,7 +91,9 @@ export interface GameRound {
 
 export interface Question {
   id: string;
-  assignment_id: string;
+  assignment_id?: string | null;
+  game_id?: string;
+  topic_id?: string;
   topic_category: string;
   question_text: string;
   option_a: string;
@@ -89,7 +103,39 @@ export interface Question {
   correct_option?: 'A' | 'B' | 'C' | 'D'; // Hidden before reveal
   explanation?: string;
   difficulty: DifficultyLevel;
+  is_used?: boolean;
   created_at: string;
+}
+
+export interface PoolQuestion {
+  id?: string;
+  topic_id?: string;
+  topic_category: string;
+  question_text: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  correct_option: 'A' | 'B' | 'C' | 'D';
+  explanation: string;
+  difficulty: DifficultyLevel;
+  is_used?: boolean;
+  source?: string;
+  created_at?: string;
+}
+
+export interface GameTopicProgress {
+  topic_id: string;
+  topic_name: string;
+  required_count: number;
+  current_count: number;
+  status: 'pending' | 'generating' | 'complete' | 'incomplete' | 'failed';
+  difficulty_counts: {
+    easy: number;
+    medium: number;
+    hard: number;
+  };
+  error?: string;
 }
 
 export interface Assignment {

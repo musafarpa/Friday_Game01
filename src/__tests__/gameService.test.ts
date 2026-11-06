@@ -70,6 +70,14 @@ describe('Friday Fun 2026 - Core Game Engine & Functional QA', () => {
     it('should transition game status: active, pause, complete, cancel', async () => {
       const game = await gameService.createGame('Status Test Game', 'testing', {});
       
+      // Verify hard gate blocks activation when topics lack 7 questions
+      await expect(gameService.updateGameStatus(game.id, 'active')).rejects.toThrow(
+        /minimum 7 questions/i
+      );
+
+      // Populate pool (7 questions per topic)
+      await gameService.generateQuestionPoolForGame(game.id, undefined, 7);
+
       await gameService.updateGameStatus(game.id, 'active');
       let updated = await gameService.getGame(game.id);
       expect(updated?.status).toBe('active');
