@@ -247,3 +247,4 @@ runTestSuite().catch((err) => {
   console.error('\nFATAL ERROR DURING TEST EXECUTION:', err);
   process.exit(1);
 });
+
