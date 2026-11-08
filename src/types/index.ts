@@ -103,6 +103,7 @@ export interface Question {
   correct_option?: 'A' | 'B' | 'C' | 'D'; // Hidden before reveal
   explanation?: string;
   difficulty: DifficultyLevel;
+  sequence_num?: number;
   is_used?: boolean;
   created_at: string;
 }
@@ -119,6 +120,7 @@ export interface PoolQuestion {
   correct_option: 'A' | 'B' | 'C' | 'D';
   explanation: string;
   difficulty: DifficultyLevel;
+  sequence_num?: number;
   is_used?: boolean;
   source?: string;
   created_at?: string;
@@ -149,11 +151,16 @@ export interface Assignment {
   status: AssignmentStatus;
   created_at: string;
   raw_challenge_token?: string;
+  total_questions?: number;
+  answered_questions?: number;
+  current_score?: number;
   sender?: Participant;
   receiver?: Participant;
   topic?: Topic;
   question?: Question;
+  questions?: Question[];
   answer?: Answer;
+  answers?: Answer[];
 }
 
 export interface Answer {
@@ -163,7 +170,27 @@ export interface Answer {
   participant_id: string;
   selected_option: 'A' | 'B' | 'C' | 'D';
   is_correct?: boolean;
+  question_num?: number;
   submitted_at: string;
+}
+
+export interface ChallengeData {
+  assignment: Assignment;
+  game: Game;
+  round: GameRound & { is_revealed?: boolean };
+  sender: Participant;
+  receiver: Participant;
+  topic: Topic;
+  questions: Question[];
+  question?: Question;
+  answers: Answer[];
+  user_answer?: Answer;
+  progress?: {
+    total: number;
+    answered: number;
+    is_completed: boolean;
+    current_score: number;
+  };
 }
 
 export interface Score {

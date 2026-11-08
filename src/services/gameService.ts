@@ -21,11 +21,15 @@ import {
 // (Automatically superseded whenever live Supabase credentials are configured)
 // ============================================================================
 const STORAGE_PREFIX = 'friday_fun_2026_';
+const memStorage = new Map<string, string>();
 
 function getLocal<T>(key: string, defaultValue: T): T {
   try {
-    if (typeof localStorage === 'undefined') return defaultValue;
-    const val = localStorage.getItem(STORAGE_PREFIX + key);
+    if (typeof localStorage !== 'undefined') {
+      const val = localStorage.getItem(STORAGE_PREFIX + key);
+      return val ? JSON.parse(val) : defaultValue;
+    }
+    const val = memStorage.get(STORAGE_PREFIX + key);
     return val ? JSON.parse(val) : defaultValue;
   } catch {
     return defaultValue;
@@ -34,8 +38,11 @@ function getLocal<T>(key: string, defaultValue: T): T {
 
 function setLocal<T>(key: string, value: T): void {
   try {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
+      return;
+    }
+    memStorage.set(STORAGE_PREFIX + key, JSON.stringify(value));
   } catch (e) {
     console.error('LocalStorage write error:', e);
   }
@@ -1301,8 +1308,8 @@ export const gameService = {
       throw new Error('Self-selection is not permitted. You must challenge another player.');
     }
 
-    // 1. Check if the game has a pre-generated question pool for this topic
-    let selectedQuestion: any = null;
+    // 1. Generate or retrieve a full 7-question set with distribution: 3 Easy, 3 Medium, 1 Hard
+    let questionsSet: any[] = [];
     try {
       const game = await this.getGame(gameId);
       if (game?.settings?.topics_question_pool) {
@@ -1313,40 +1320,56 @@ export const gameService = {
           );
 
         if (poolEntry && poolEntry.questions && poolEntry.questions.length > 0) {
-          const unused = poolEntry.questions.find((q) => !q.is_used);
-          if (unused) {
-            selectedQuestion = unused;
-            unused.is_used = true;
-            // Update the pool status in game settings
+          const unusedPool = poolEntry.questions.filter((q) => !q.is_used);
+          if (unusedPool.length >= 7) {
+            questionsSet = unusedPool.slice(0, 7).map((q, idx) => {
+              q.is_used = true;
+              return {
+                topic: q.topic_category || topicName,
+                question: q.question_text,
+                option_a: q.option_a,
+                option_b: q.option_b,
+                option_c: q.option_c,
+                option_d: q.option_d,
+                correct_option: q.correct_option,
+                explanation: q.explanation,
+                difficulty: q.difficulty || (idx < 3 ? 'easy' : idx < 6 ? 'medium' : 'hard'),
+                sequence_num: idx + 1,
+              };
+            });
             await this.updateGame(gameId, { settings: game.settings });
           }
         }
       }
     } catch (e) {
-      console.warn('Notice: Error fetching pool question, falling back to generator:', e);
+      console.warn('Notice: Error fetching pool questions:', e);
     }
 
-    const generatedQ = selectedQuestion
-      ? {
-          topic: selectedQuestion.topic_category,
-          question: selectedQuestion.question_text,
-          option_a: selectedQuestion.option_a,
-          option_b: selectedQuestion.option_b,
-          option_c: selectedQuestion.option_c,
-          option_d: selectedQuestion.option_d,
-          correct_option: selectedQuestion.correct_option,
-          explanation: selectedQuestion.explanation,
-          difficulty: selectedQuestion.difficulty,
-          source: selectedQuestion.source || 'game-pool',
-        }
-      : await generateQuestionForTopic(topicName, difficulty);
+    // If pool did not yield 7 questions, generate 7 unique questions with exact distribution
+    if (questionsSet.length < 7) {
+      const generated = await generateQuestionSetForTopic(topicName, 7, { easy: 3, medium: 3, hard: 1 });
+      questionsSet = generated.map((g, idx) => ({
+        topic: topicName,
+        question: g.question,
+        option_a: g.option_a,
+        option_b: g.option_b,
+        option_c: g.option_c,
+        option_d: g.option_d,
+        correct_option: g.correct_option,
+        explanation: g.explanation,
+        difficulty: g.difficulty,
+        sequence_num: idx + 1,
+      }));
+    }
+
+    const firstQ = questionsSet[0];
 
     // 2. Generate secure challenge token and hash
     const rawChallengeToken = generateSecureToken(24);
     const challengeTokenHash = await hashToken(rawChallengeToken);
 
     if (isSupabaseConfigured) {
-      // Try atomic secure RPC first
+      // Try atomic secure RPC allocating 7 questions
       const { data: rpcData, error: rpcError } = await supabase.rpc('create_challenge_assignment', {
         p_game_id: gameId,
         p_round_id: roundId,
@@ -1355,14 +1378,15 @@ export const gameService = {
         p_topic_id: topicId,
         p_challenge_token_hash: challengeTokenHash,
         p_topic_category: topicName,
-        p_question_text: generatedQ.question,
-        p_option_a: generatedQ.option_a,
-        p_option_b: generatedQ.option_b,
-        p_option_c: generatedQ.option_c,
-        p_option_d: generatedQ.option_d,
-        p_correct_option: generatedQ.correct_option,
-        p_explanation: generatedQ.explanation,
-        p_difficulty: generatedQ.difficulty || difficulty,
+        p_question_text: firstQ.question,
+        p_option_a: firstQ.option_a,
+        p_option_b: firstQ.option_b,
+        p_option_c: firstQ.option_c,
+        p_option_d: firstQ.option_d,
+        p_correct_option: firstQ.correct_option,
+        p_explanation: firstQ.explanation,
+        p_difficulty: firstQ.difficulty || difficulty,
+        p_questions_json: questionsSet,
       });
 
       if (!rpcError && rpcData?.assignment_id) {
@@ -1381,6 +1405,9 @@ export const gameService = {
             challenge_token_hash: challengeTokenHash,
             raw_challenge_token: rawChallengeToken,
             status: 'pending',
+            total_questions: 7,
+            answered_questions: 0,
+            current_score: 0,
             created_at: new Date().toISOString(),
           } as Assignment,
           rawChallengeToken,
@@ -1398,6 +1425,9 @@ export const gameService = {
           topic_id: topicId,
           challenge_token_hash: challengeTokenHash,
           status: 'pending',
+          total_questions: 7,
+          answered_questions: 0,
+          current_score: 0,
         })
         .select()
         .single();
@@ -1406,21 +1436,27 @@ export const gameService = {
         throw new Error(`Assignment creation failed in Supabase: ${assignError.message}`);
       }
 
-      const { error: qError } = await supabase.from('questions').insert({
+      // Insert all 7 questions
+      const questionsToInsert = questionsSet.map((q, idx) => ({
         assignment_id: assignmentData.id,
+        game_id: gameId,
+        topic_id: topicId,
+        sequence_num: idx + 1,
         topic_category: topicName,
-        question_text: generatedQ.question,
-        option_a: generatedQ.option_a,
-        option_b: generatedQ.option_b,
-        option_c: generatedQ.option_c,
-        option_d: generatedQ.option_d,
-        correct_option: generatedQ.correct_option,
-        explanation: generatedQ.explanation,
-        difficulty: generatedQ.difficulty || difficulty,
-      });
+        question_text: q.question,
+        option_a: q.option_a,
+        option_b: q.option_b,
+        option_c: q.option_c,
+        option_d: q.option_d,
+        correct_option: q.correct_option,
+        explanation: q.explanation,
+        difficulty: q.difficulty,
+        is_used: true,
+      }));
 
+      const { error: qError } = await supabase.from('questions').insert(questionsToInsert);
       if (qError) {
-        throw new Error(`Question creation failed in Supabase: ${qError.message}`);
+        console.warn('Questions bulk insert warning:', qError.message);
       }
 
       await supabase.from('participants').update({ status: 'selected' }).eq('id', senderId);
@@ -1430,17 +1466,17 @@ export const gameService = {
       setLocal('challenge_token_cache', challengeCache);
 
       return {
-        assignment: { ...assignmentData, raw_challenge_token: rawChallengeToken } as Assignment,
+        assignment: { ...assignmentData, raw_challenge_token: rawChallengeToken, total_questions: 7 } as Assignment,
         rawChallengeToken,
       };
     }
 
-    // Local mode
+    // Local mode: Create assignment and store all 7 questions
     const assignments = getLocal<Assignment[]>('assignments', []);
     const questions = getLocal<Question[]>('questions', []);
     const participants = getLocal<Participant[]>('participants', []);
 
-    const newAssignmentId = `assign-${Date.now()}`;
+    const newAssignmentId = `assign-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const newAssignment: Assignment = {
       id: newAssignmentId,
       game_id: gameId,
@@ -1451,26 +1487,35 @@ export const gameService = {
       challenge_token_hash: challengeTokenHash,
       raw_challenge_token: rawChallengeToken,
       status: 'pending',
+      total_questions: 7,
+      answered_questions: 0,
+      current_score: 0,
       created_at: new Date().toISOString(),
     };
     assignments.push(newAssignment);
     setLocal('assignments', assignments);
 
-    const newQuestion: Question = {
-      id: `q-${Date.now()}`,
-      assignment_id: newAssignmentId,
-      topic_category: topicName,
-      question_text: generatedQ.question,
-      option_a: generatedQ.option_a,
-      option_b: generatedQ.option_b,
-      option_c: generatedQ.option_c,
-      option_d: generatedQ.option_d,
-      correct_option: generatedQ.correct_option,
-      explanation: generatedQ.explanation,
-      difficulty: generatedQ.difficulty || difficulty,
-      created_at: new Date().toISOString(),
-    };
-    questions.push(newQuestion);
+    // Add all 7 questions to storage
+    questionsSet.forEach((q, idx) => {
+      questions.push({
+        id: `q-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+        assignment_id: newAssignmentId,
+        game_id: gameId,
+        topic_id: topicId,
+        sequence_num: idx + 1,
+        topic_category: topicName,
+        question_text: q.question,
+        option_a: q.option_a,
+        option_b: q.option_b,
+        option_c: q.option_c,
+        option_d: q.option_d,
+        correct_option: q.correct_option,
+        explanation: q.explanation,
+        difficulty: q.difficulty,
+        is_used: true,
+        created_at: new Date().toISOString(),
+      });
+    });
     setLocal('questions', questions);
 
     const sender = participants.find((p) => p.id === senderId);
@@ -1501,7 +1546,25 @@ export const gameService = {
       if (error) {
         throw new Error(`Failed to load challenge from Supabase: ${error.message}`);
       }
-      return data || null;
+      if (!data) return null;
+
+      // Ensure backward-compatible single object references alongside complete arrays
+      const questions = Array.isArray(data.questions) ? data.questions : (data.question ? [data.question] : []);
+      const answers = Array.isArray(data.answers) ? data.answers : (data.user_answer ? [data.user_answer] : []);
+
+      return {
+        ...data,
+        questions,
+        question: questions[0] || data.question || null,
+        answers,
+        user_answer: answers[0] || data.user_answer || null,
+        progress: data.progress || {
+          total: questions.length || 7,
+          answered: answers.length,
+          is_completed: data.assignment?.status === 'submitted' || answers.length >= (questions.length || 7),
+          current_score: data.assignment?.current_score || 0,
+        },
+      };
     }
 
     // Local mode
@@ -1529,43 +1592,64 @@ export const gameService = {
     const sender = participants.find((p) => p.id === assignment.sender_id);
     const receiver = participants.find((p) => p.id === assignment.receiver_id);
     const topic = topics.find((t) => t.id === assignment.topic_id);
-    const question = questions.find((q) => q.assignment_id === assignment.id);
-    const userAnswer = answers.find((ans) => ans.assignment_id === assignment.id);
 
-    const isRevealed = round?.status === 'revealed' || game?.status === 'completed';
+    const assignmentQuestions = questions
+      .filter((q) => q.assignment_id === assignment.id)
+      .sort((a, b) => (a.sequence_num || 0) - (b.sequence_num || 0));
+
+    const assignmentAnswers = answers
+      .filter((ans) => ans.assignment_id === assignment.id)
+      .sort((a, b) => (a.question_num || 0) - (b.question_num || 0));
+
+    const isRevealed = round?.status === 'revealed' || round?.status === 'closed' || game?.status === 'completed';
+
+    const sanitizedQuestions = assignmentQuestions.map((q, idx) => ({
+      ...q,
+      sequence_num: q.sequence_num || idx + 1,
+      correct_option: isRevealed ? q.correct_option : null,
+      explanation: isRevealed ? q.explanation : null,
+    }));
+
+    const sanitizedAnswers = assignmentAnswers.map((ans, idx) => ({
+      ...ans,
+      question_num: ans.question_num || idx + 1,
+      is_correct: isRevealed ? ans.is_correct : null,
+    }));
+
+    const totalQuestions = assignment.total_questions || sanitizedQuestions.length || 7;
+    const answeredCount = sanitizedAnswers.length;
+    const isCompleted = assignment.status === 'submitted' || answeredCount >= totalQuestions;
 
     return {
-      assignment,
+      assignment: {
+        ...assignment,
+        total_questions: totalQuestions,
+        answered_questions: answeredCount,
+        current_score: assignment.current_score || 0,
+      },
       game,
       round: { ...round, is_revealed: isRevealed },
       sender,
       receiver,
       topic,
-      question: question
-        ? {
-            id: question.id,
-            topic_category: question.topic_category,
-            question_text: question.question_text,
-            option_a: question.option_a,
-            option_b: question.option_b,
-            option_c: question.option_c,
-            option_d: question.option_d,
-            difficulty: question.difficulty,
-            correct_option: isRevealed ? question.correct_option : null,
-            explanation: isRevealed ? question.explanation : null,
-          }
-        : null,
-      user_answer: userAnswer
-        ? {
-            selected_option: userAnswer.selected_option,
-            submitted_at: userAnswer.submitted_at,
-            is_correct: isRevealed ? userAnswer.is_correct : null,
-          }
-        : null,
+      questions: sanitizedQuestions,
+      question: sanitizedQuestions[0] || null,
+      answers: sanitizedAnswers,
+      user_answer: sanitizedAnswers[0] || null,
+      progress: {
+        total: totalQuestions,
+        answered: answeredCount,
+        is_completed: isCompleted,
+        current_score: assignment.current_score || 0,
+      },
     };
   },
 
-  async submitAnswer(rawChallengeToken: string, selectedOption: 'A' | 'B' | 'C' | 'D'): Promise<{ success: boolean; error?: string }> {
+  async submitAnswer(
+    rawChallengeToken: string,
+    selectedOption: 'A' | 'B' | 'C' | 'D',
+    questionId?: string
+  ): Promise<{ success: boolean; is_completed?: boolean; current_score?: number; error?: string }> {
     if (!['A', 'B', 'C', 'D'].includes(selectedOption)) {
       return { success: false, error: 'Invalid answer option. Must be A, B, C, or D.' };
     }
@@ -1576,12 +1660,17 @@ export const gameService = {
       const { data, error } = await supabase.rpc('submit_challenge_answer', {
         p_token_hash: tokenHash,
         p_selected_option: selectedOption,
+        p_question_id: questionId || null,
       });
 
       if (error) {
         return { success: false, error: error.message };
       }
-      return { success: true };
+      return {
+        success: true,
+        is_completed: data?.is_completed ?? false,
+        current_score: data?.current_score,
+      };
     }
 
     // Local mode answer submission
@@ -1600,41 +1689,76 @@ export const gameService = {
     }
 
     if (assignment.status === 'submitted') {
-      return { success: false, error: 'An answer has already been submitted for this challenge.' };
+      return { success: false, error: 'This challenge has already been completed.' };
     }
 
-    const question = questions.find((q) => q.assignment_id === assignment.id);
-    if (!question) {
-      return { success: false, error: 'Question data not found.' };
+    const assignmentQuestions = questions
+      .filter((q) => q.assignment_id === assignment.id)
+      .sort((a, b) => (a.sequence_num || 0) - (b.sequence_num || 0));
+
+    let targetQuestion: Question | undefined;
+    if (questionId) {
+      targetQuestion = assignmentQuestions.find((q) => q.id === questionId);
+      if (!targetQuestion) {
+        return { success: false, error: 'Question data not found.' };
+      }
+      const existing = answers.find(
+        (ans) => ans.assignment_id === assignment.id && ans.question_id === questionId
+      );
+      if (existing) {
+        return { success: false, error: 'An answer has already been submitted for this question.' };
+      }
+    } else {
+      // Legacy caller: if an answer has already been submitted for this assignment, block duplicate
+      const existingAny = answers.find((ans) => ans.assignment_id === assignment.id);
+      if (existingAny) {
+        return { success: false, error: 'An answer has already been submitted for this challenge.' };
+      }
+      targetQuestion = assignmentQuestions[0];
+      if (!targetQuestion) {
+        return { success: false, error: 'Question data not found.' };
+      }
     }
 
-    const isCorrect = question.correct_option === selectedOption;
+    const isCorrect = targetQuestion.correct_option === selectedOption;
+    const game = games.find((g) => g.id === assignment.game_id);
+    const pointsCorrect = game?.settings?.points_correct ?? 10;
+    const pointsWrong = game?.settings?.points_wrong ?? 0;
+    const pointsAwarded = isCorrect ? pointsCorrect : pointsWrong;
+
+    const currentAnsweredCount = answers.filter((a) => a.assignment_id === assignment.id).length;
+    const questionNum = targetQuestion.sequence_num || currentAnsweredCount + 1;
 
     const newAnswer: Answer = {
-      id: `ans-${Date.now()}`,
+      id: `ans-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       assignment_id: assignment.id,
-      question_id: question.id,
+      question_id: targetQuestion.id,
       participant_id: assignment.receiver_id,
       selected_option: selectedOption,
       is_correct: isCorrect,
+      question_num: questionNum,
       submitted_at: new Date().toISOString(),
     };
     answers.push(newAnswer);
     setLocal('answers', answers);
 
-    assignment.status = 'submitted';
+    const totalQuestions = assignment.total_questions || assignmentQuestions.length || 7;
+    const newAnsweredCount = currentAnsweredCount + 1;
+    const isCompleted = newAnsweredCount >= totalQuestions;
+
+    assignment.answered_questions = newAnsweredCount;
+    assignment.current_score = (assignment.current_score || 0) + pointsAwarded;
+    if (isCompleted) {
+      assignment.status = 'submitted';
+    }
     setLocal('assignments', assignments);
 
-    const game = games.find((g) => g.id === assignment.game_id);
-    const pointsCorrect = game?.settings?.points_correct ?? 10;
-    const pointsWrong = game?.settings?.points_wrong ?? 0;
-
     let score = scores.find(
-      (s) => s.game_id === assignment.game_id && s.participant_id === assignment.receiver_id
+      (s) => s.game_id === assignment.game_id && s.round_id === assignment.round_id && s.participant_id === assignment.receiver_id
     );
     if (!score) {
       score = {
-        id: `sc-${Date.now()}`,
+        id: `sc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         game_id: assignment.game_id,
         round_id: assignment.round_id,
         participant_id: assignment.receiver_id,
@@ -1656,7 +1780,11 @@ export const gameService = {
     score.updated_at = new Date().toISOString();
     setLocal('scores', scores);
 
-    return { success: true };
+    return {
+      success: true,
+      is_completed: isCompleted,
+      current_score: assignment.current_score,
+    };
   },
 
   // --- Monitoring & Rounds ---
@@ -1673,12 +1801,15 @@ export const gameService = {
           topic_id,
           challenge_token_hash,
           status,
+          total_questions,
+          answered_questions,
+          current_score,
           created_at,
           sender:participants!assignments_sender_id_fkey(id, display_name, player_code),
           receiver:participants!assignments_receiver_id_fkey(id, display_name, player_code),
           topic:topics(id, name),
-          question:questions(id, question_text, option_a, option_b, option_c, option_d, correct_option, difficulty),
-          answer:answers(selected_option, is_correct, submitted_at)
+          question:questions(id, question_text, option_a, option_b, option_c, option_d, correct_option, difficulty, sequence_num),
+          answer:answers(question_id, selected_option, is_correct, question_num, submitted_at)
         `)
         .eq('game_id', gameId)
         .order('created_at', { ascending: false });
@@ -1688,15 +1819,24 @@ export const gameService = {
       }
 
       const tokenCache = getLocal<Record<string, string>>('challenge_token_cache', {});
-      return (data || []).map((item: any) => ({
-        ...item,
-        raw_challenge_token: tokenCache[item.id] || item.challenge_token_hash,
-        sender: item.sender,
-        receiver: item.receiver,
-        topic: item.topic,
-        question: item.question,
-        answer: Array.isArray(item.answer) ? item.answer[0] : item.answer,
-      })) as Assignment[];
+      return (data || []).map((item: any) => {
+        const qList = Array.isArray(item.question) ? item.question : (item.question ? [item.question] : []);
+        const aList = Array.isArray(item.answer) ? item.answer : (item.answer ? [item.answer] : []);
+        return {
+          ...item,
+          raw_challenge_token: tokenCache[item.id] || item.challenge_token_hash,
+          sender: item.sender,
+          receiver: item.receiver,
+          topic: item.topic,
+          question: qList[0] || null,
+          questions: qList,
+          answer: aList[0] || null,
+          answers: aList,
+          total_questions: item.total_questions || qList.length || 7,
+          answered_questions: item.answered_questions || aList.length || 0,
+          current_score: item.current_score || 0,
+        };
+      }) as Assignment[];
     }
 
     // Local mode
@@ -1708,16 +1848,21 @@ export const gameService = {
     const tokenCache = getLocal<Record<string, string>>('challenge_token_cache', {});
 
     return assignments.map((a) => {
-      const q = questions.find((item) => item.assignment_id === a.id);
-      const ans = answers.find((item) => item.assignment_id === a.id);
+      const qList = questions.filter((item) => item.assignment_id === a.id).sort((x, y) => (x.sequence_num || 0) - (y.sequence_num || 0));
+      const aList = answers.filter((item) => item.assignment_id === a.id).sort((x, y) => (x.question_num || 0) - (y.question_num || 0));
       return {
         ...a,
-        raw_challenge_token: tokenCache[a.id] || a.raw_challenge_token || a.challenge_token_hash,
+        raw_challenge_token: tokenCache[a.id] || a.challenge_token_hash,
         sender: participants.find((p) => p.id === a.sender_id),
         receiver: participants.find((p) => p.id === a.receiver_id),
         topic: topics.find((t) => t.id === a.topic_id),
-        question: q,
-        answer: ans,
+        question: qList[0] || null,
+        questions: qList,
+        answer: aList[0] || null,
+        answers: aList,
+        total_questions: a.total_questions || qList.length || 7,
+        answered_questions: aList.length,
+        current_score: a.current_score || 0,
       };
     });
   },
