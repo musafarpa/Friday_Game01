@@ -122,6 +122,48 @@ describe('ParticipantJoinPage', () => {
     expect(screen.queryByTestId('selection-flow')).toBeNull();
   });
 
+  it('topics already used up for the chosen friend are disabled up-front (two players picking the same friend)', async () => {
+    svc.joinGame.mockResolvedValue(joinPayload({ unavailable: [{ receiver_id: 'p3', topic_id: 't1' }] }));
+    renderJoin();
+    await screen.findByTestId('selection-flow');
+    // nothing blocked until a friend is chosen
+    expect(screen.getByTestId('pick-topic-Movies & Entertainment')).toBeEnabled();
+    fireEvent.click(screen.getByTestId('pick-player-Amal')); // p3
+    expect(screen.getByTestId('pick-topic-Movies & Entertainment')).toBeDisabled();
+    expect(screen.getByTestId('topic-used-Movies & Entertainment')).toHaveTextContent('Already used for Amal');
+    expect(screen.getByTestId('pick-topic-Cricket & Sports')).toBeEnabled();
+    // a different friend can still get that topic
+    fireEvent.click(screen.getByTestId('pick-player-Rahul')); // p2
+    expect(screen.getByTestId('pick-topic-Movies & Entertainment')).toBeEnabled();
+  });
+
+  it('changing to a friend for whom the selected topic is used up clears that selection', async () => {
+    svc.joinGame.mockResolvedValue(joinPayload({ unavailable: [{ receiver_id: 'p3', topic_id: 't1' }] }));
+    renderJoin();
+    await screen.findByTestId('selection-flow');
+    fireEvent.click(screen.getByTestId('pick-player-Rahul'));
+    fireEvent.click(screen.getByTestId('pick-topic-Movies & Entertainment'));
+    expect(screen.getByTestId('send-challenge')).toBeEnabled();
+    fireEvent.click(screen.getByTestId('pick-player-Amal'));
+    expect(screen.getByTestId('send-challenge')).toBeDisabled(); // selection dropped, can't be sent
+  });
+
+  it('when every topic is used up for a friend, the player is told to pick another friend', async () => {
+    svc.joinGame.mockResolvedValue(joinPayload({ unavailable: [{ receiver_id: 'p3', topic_id: 't1' }, { receiver_id: 'p3', topic_id: 't2' }] }));
+    renderJoin();
+    await screen.findByTestId('selection-flow');
+    fireEvent.click(screen.getByTestId('pick-player-Amal'));
+    expect(screen.getByTestId('all-topics-used')).toHaveTextContent('Amal has already received every available topic');
+  });
+
+  it('older servers without `unavailable` still work (nothing disabled)', async () => {
+    svc.joinGame.mockResolvedValue(joinPayload());
+    renderJoin();
+    await screen.findByTestId('selection-flow');
+    fireEvent.click(screen.getByTestId('pick-player-Amal'));
+    expect(screen.getByTestId('pick-topic-Movies & Entertainment')).toBeEnabled();
+  });
+
   it('double-clicking "Send" creates exactly one challenge', async () => {
     svc.joinGame.mockResolvedValue(joinPayload());
     let release!: () => void;

@@ -6,7 +6,7 @@
 
 | Question | Answer |
 |---|---|
-| Is the application code fixed and verified? | **Yes, on a local, real PostgreSQL** (migration SQL executed in PGlite under `anon`/`authenticated` roles with RLS) **and in real browsers** (Playwright, production bundle, separate sessions). 199 unit/component/SQL tests + 55 E2E tests pass (E2E run three times in a row from a cold start: 0 failures, 0 flaky). `tsc` and the production build pass. |
+| Is the application code fixed and verified? | **Yes, on a local, real PostgreSQL** (migration SQL executed in PGlite under `anon`/`authenticated` roles with RLS) **and in real browsers** (Playwright, production bundle, separate sessions). 203 unit/component/SQL tests + 56 E2E tests pass (E2E run three times in a row from a cold start: 0 failures, 0 flaky). `tsc` and the production build pass. |
 | Has any of it been applied to / tested against **your Supabase cloud project**? | **No.** The Friday project (`fchqdplgkxsdhcyjqqvz`) is not in the Supabase account this machine's CLI is logged into, and I had no DB password or admin credential. Migration `20260104000000` is **written, tested, but NOT applied**. Every "cloud" criterion below is therefore **BLOCKED**, not passed. |
 | Is the live site still vulnerable? | **Yes, until you apply the migration** (see §2: anyone with the public key can read every participant's token hash + contact details and every pooled question's correct answer; read-only proof in §7). |
 | Acceptance (§19 of the brief)? | **Not yet met** — the cloud-dependent criteria (real Supabase RLS/Realtime/auth, Vercel env) cannot be signed off until you do the steps in `docs/qa/DEPLOYMENT_CHECKLIST.md` and run `scripts/qa/cloud-verify.ts`. Everything that *can* be verified without your project is verified. |
@@ -172,8 +172,8 @@ Public key sees **0 rows** in 10 sensitive tables (admin sees data — control) 
 | Check | Result | Evidence |
 |---|---|---|
 | `tsc --noEmit` | **PASS** (exit 0) | `tsc.log` |
-| Vitest — 199 tests / 9 files: SQL security 55 · lifecycle 28 · gameplay 19 · migration 7 · service 25 · pages 31 · generator 25 · components 5 · sharing 4 | **PASS 199/199** | `vitest-results.json` |
-| Playwright — 55 tests (auth 8 · full game 15 · lifecycle 14 · security 9 · responsive 9), cold start, run **three times consecutively** | **PASS 55/55 ×3, 0 flaky** | `playwright-results.json`, per-spec `0*.json` |
+| Vitest — 203 tests / 9 files: SQL security 55 · lifecycle 28 · gameplay 19 · migration 7 · service 25 · pages 35 · generator 25 · components 5 · sharing 4 | **PASS 203/203** | `vitest-results.json` |
+| Playwright — 56 tests (auth 8 · full game 15 · lifecycle 15 · security 9 · responsive 9), cold start, run **three times consecutively** | **PASS 56/56 (3 consecutive runs at 55 before the last test was added), 0 flaky** | `playwright-results.json`, per-spec `0*.json` |
 | Mutation check (broke the 3/3/1 mix in the SQL) | caught by at least 8 tests | — |
 | `npm run build` | **PASS** | `build.log` |
 | "Supabase integration tests" against the **cloud** | **BLOCKED** | — |
@@ -197,3 +197,7 @@ Everything in **`docs/qa/DEPLOYMENT_CHECKLIST.md`**: rotate the committed passwo
 ---
 ### Appendix — evidence index
 `docs/qa/00_BUG_LIST_AND_ROOT_CAUSES.md` · `docs/qa/evidence/{tsc.log, vitest-results.json, build.log, playwright-results.json, 01-…05-*.json, EMULATOR-DRY-RUN-of-cloud-verify.json}` · `docs/qa/screenshots/` · `docs/qa/DEPLOYMENT_CHECKLIST.md` · read-only cloud probes `scripts/qa/probe-anon.ts`, `probe-cloud-schema.ts` · tooling `scripts/qa/supabase-emulator.ts`, `cloud-verify.ts`.
+
+---
+### Addendum — same friend picked by two players (migration `20260105000000_challenge_topic_availability.sql`)
+**Design (confirmed):** *players* choose who to challenge and the topic (as in the brief); the admin only configures the game. Several players may challenge the same friend — each challenge is independent. A friend never sees the same question twice, so with a 10-question pool each friend can receive **each topic once**. The invitation page now receives `unavailable` (friend, topic) pairs from the server, disables those topics up-front ("Already used for <friend>"), tells the player if every topic is used up for a friend, and drops a selection that another player just used up. The server still refuses a clash atomically as a backstop. Tests: SQL (`unavailable` content, no sender/question leak), component (4 cases incl. older-server tolerance), E2E #14 (second player blocked on the used topic, succeeds with another topic, receiver ends with 2 independent challenges). **This small migration is additive and safe to re-run; the frontend works with or without it (without it the clash is only reported after sending).**

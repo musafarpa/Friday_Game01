@@ -19,6 +19,7 @@ sitting, ideally outside a live game.
 
 ## 3. Apply the migration
 - [ ] SQL Editor → paste `supabase/migrations/20260104000000_security_lifecycle_hardening.sql` → Run. (Idempotent; safe to re-run.)
+- [ ] Then paste and run `supabase/migrations/20260105000000_challenge_topic_availability.sql` (small, additive: disables already-used topics for a friend on the invitation page).
 - [ ] Verify (all should hold):
 ```sql
 select count(*) from information_schema.tables where table_schema='public' and table_name in ('participant_secrets','assignment_secrets','app_settings'); -- 3

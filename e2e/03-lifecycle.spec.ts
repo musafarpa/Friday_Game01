@@ -516,3 +516,31 @@ test('13. overview buttons: Test Connection, Live Monitor, View all & manage, Se
   await expect(admin.getByTestId('game-selector').locator('option:checked')).toContainText('Stats Live');
   evidence.overview_buttons = 'Test Connection / Live Monitor / View all / Select & view verified';
 });
+
+test('14. two players pick the SAME friend: the 2nd sees the used topic disabled up-front and can still send a different topic', async ({ browser, request }) => {
+  const g = await seedGame(api, 'Same Friend', { players: P3, start: true });
+  // P1 already challenged P3 on Movies
+  const first = await api.rpc('participant_create_challenge', { p_game_id: g.gameId, p_token: g.players.P1.token, p_receiver_id: g.players.P3.id, p_topic_id: g.topicIds[0] });
+  expect(first.error).toBeNull();
+
+  const { ctx: c2, page } = await newPlayerContext(browser);
+  await page.goto(g.players.P2.url);
+  await expect(page.getByTestId('selection-flow')).toBeVisible();
+  await page.getByTestId('pick-player-P3').click();
+  await expect(page.getByTestId('pick-topic-Movies & Entertainment')).toBeDisabled();
+  await expect(page.getByTestId('topic-used-Movies & Entertainment')).toContainText('Already used for P3');
+  await expect(page.getByTestId('pick-topic-Cricket & Sports')).toBeEnabled();
+  // a different friend is still free to take Movies
+  await page.getByTestId('pick-player-P1').click();
+  await expect(page.getByTestId('pick-topic-Movies & Entertainment')).toBeEnabled();
+
+  // P2 -> P3 on Cricket works and P3 now has TWO independent challenges
+  await page.getByTestId('pick-player-P3').click();
+  await page.getByTestId('pick-topic-Cricket & Sports').click();
+  await page.getByTestId('send-challenge').click();
+  await expect(page.getByTestId('outgoing-result')).toContainText('Your Challenge For P3 Is Ready');
+  const rows = await sql(request, `select t.name, count(*)::int n from public.assignments a join public.topics t on t.id = a.topic_id where a.receiver_id = $1 group by t.name order by t.name`, [g.players.P3.id]);
+  expect(rows).toEqual([{ name: 'Cricket & Sports', n: 1 }, { name: 'Movies & Entertainment', n: 1 }]);
+  await c2.close();
+  evidence.same_friend = 'used topic disabled before sending; different topic accepted; receiver has 2 independent challenges';
+});

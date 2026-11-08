@@ -209,6 +209,8 @@ export interface JoinPayload {
   topics: Array<{ id: string; name: string; description?: string; icon?: string }>;
   outgoing: ChallengeSummary[];
   incoming: ChallengeSummary[];
+  /** (friend, topic) pairs that can no longer be served (friend already got every unseen question). Absent before migration 20260105. */
+  unavailable?: Array<{ receiver_id: string; topic_id: string }>;
   can_create: boolean;
 }
 

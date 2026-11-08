@@ -54,6 +54,12 @@ export const ParticipantJoinPage: React.FC = () => {
     void load(false);
   }, [load]);
 
+  // if someone else just used up the selected (friend, topic) pair, drop the selection instead of failing on send
+  useEffect(() => {
+    if (!data || !receiverId || !topicId) return;
+    if ((data.unavailable ?? []).some((u) => u.receiver_id === receiverId && u.topic_id === topicId)) setTopicId('');
+  }, [data, receiverId, topicId]);
+
   // live: game started / paused / completed / cancelled flips this page without a manual refresh
   useEffect(() => {
     if (!gameId || !data) return;
@@ -116,6 +122,12 @@ export const ParticipantJoinPage: React.FC = () => {
   const sent = outgoing[0];
   const sentUrl = sent?.raw_token ? buildChallengeUrl(sent.raw_token) : null;
   const canPick = data.can_create && status === 'active';
+  // topics already used up for the friend currently selected (server-computed; tolerant of older payloads)
+  const blockedForReceiver = new Set(
+    (data.unavailable ?? []).filter((u) => u.receiver_id === receiverId).map((u) => u.topic_id)
+  );
+  const receiverName = roster.find((r) => r.id === receiverId)?.display_name;
+  const allBlocked = Boolean(receiverId) && topics.length > 0 && topics.every((t) => blockedForReceiver.has(t.id));
 
   return (
     <div className="min-h-screen bg-background text-slate-100 flex flex-col overflow-x-hidden">
@@ -271,7 +283,13 @@ export const ParticipantJoinPage: React.FC = () => {
                 {roster.map((p) => {
                   const on = receiverId === p.id;
                   return (
-                    <button key={p.id} type="button" data-testid={`pick-player-${p.display_name}`} aria-pressed={on} onClick={() => { setReceiverId(p.id); setSelectionError(''); }} className={`p-4 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-2.5 min-h-[44px] ${on ? 'bg-indigo-600/25 border-indigo-500 ring-2 ring-indigo-400/50 shadow-lg shadow-indigo-600/20' : 'bg-background-darker border-background-border hover:border-slate-700'}`}>
+                    <button key={p.id} type="button" data-testid={`pick-player-${p.display_name}`} aria-pressed={on} onClick={() => {
+                      setReceiverId(p.id);
+                      setSelectionError('');
+                      // a topic already used up for the newly chosen friend can't stay selected
+                      const taken = (data.unavailable ?? []).some((u) => u.receiver_id === p.id && u.topic_id === topicId);
+                      if (taken) setTopicId('');
+                    }} className={`p-4 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-2.5 min-h-[44px] ${on ? 'bg-indigo-600/25 border-indigo-500 ring-2 ring-indigo-400/50 shadow-lg shadow-indigo-600/20' : 'bg-background-darker border-background-border hover:border-slate-700'}`}>
                       <PlayerAvatar displayName={p.display_name} playerCode={p.player_code} size="md" selected={on} />
                       <span className="font-bold text-sm text-white truncate max-w-full">{p.display_name}</span>
                     </button>
@@ -289,14 +307,21 @@ export const ParticipantJoinPage: React.FC = () => {
                   <p className="text-xs text-slate-400">They'll get 7 questions (3 easy, 3 medium, 1 hard). A friend never sees the same question twice, so they can receive each topic only once.</p>
                 </div>
               </div>
+              {allBlocked && (
+                <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5" role="status" data-testid="all-topics-used">
+                  {receiverName} has already received every available topic. Please pick another friend.
+                </p>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                 {topics.map((t) => {
                   const on = topicId === t.id;
+                  const blocked = blockedForReceiver.has(t.id);
                   return (
-                    <button key={t.id} type="button" data-testid={`pick-topic-${t.name}`} aria-pressed={on} onClick={() => { setTopicId(t.id); setSelectionError(''); }} className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between min-h-[44px] ${on ? 'bg-purple-600/20 border-purple-500 ring-2 ring-purple-400/40 shadow-lg shadow-purple-600/15' : 'bg-background-darker border-background-border hover:border-slate-700'}`}>
-                      <div className="flex items-center justify-between mb-1">
+                    <button key={t.id} type="button" disabled={blocked} data-testid={`pick-topic-${t.name}`} aria-pressed={on} onClick={() => { setTopicId(t.id); setSelectionError(''); }} className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed ${on ? 'bg-purple-600/20 border-purple-500 ring-2 ring-purple-400/40 shadow-lg shadow-purple-600/15' : 'bg-background-darker border-background-border hover:border-slate-700'}`}>
+                      <div className="flex items-center justify-between mb-1 gap-2">
                         <span className="font-bold text-sm text-white">{t.name}</span>
                         {on && <span className="text-xs font-bold text-purple-400">Selected ✓</span>}
+                        {blocked && <span className="text-[11px] font-bold text-amber-300" data-testid={`topic-used-${t.name}`}>Already used for {receiverName}</span>}
                       </div>
                       <p className="text-xs text-slate-400 line-clamp-2">{t.description}</p>
                     </button>

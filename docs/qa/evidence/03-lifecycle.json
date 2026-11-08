@@ -24,5 +24,6 @@
     "canc": 1
   },
   "overview_updates_without_manual_refresh": true,
-  "overview_buttons": "Test Connection / Live Monitor / View all / Select & view verified"
+  "overview_buttons": "Test Connection / Live Monitor / View all / Select & view verified",
+  "same_friend": "used topic disabled before sending; different topic accepted; receiver has 2 independent challenges"
 }

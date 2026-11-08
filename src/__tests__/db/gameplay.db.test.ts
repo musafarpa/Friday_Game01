@@ -274,6 +274,12 @@ describe('end-to-end gameplay on a real Postgres: Friday Fun QA Test (A,B,C,D x 
     await db.rpc(ADMIN, 'admin_set_game_status', { p_game_id: g.gameId, p_action: 'start' });
     const t = g.topicIds[0];
     const first = await db.rpc(ANON, 'participant_create_challenge', { p_game_id: g.gameId, p_token: pl.U1.token, p_receiver_id: pl.U3.id, p_topic_id: t });
+    // BEFORE sending, the invitation page is told which (friend, topic) pairs are used up
+    const before = await db.rpc(ANON, 'participant_join', { p_game_id: g.gameId, p_token: pl.U2.token });
+    expect(before.unavailable).toEqual([{ receiver_id: pl.U3.id, topic_id: t }]); // U3+Movies only; U1+Movies is still free
+    expect(JSON.stringify(before.unavailable)).not.toContain(pl.U1.id);
+    // nothing sensitive leaks through it (no sender, no questions, no answers)
+    expect(Object.keys(before.unavailable[0]).sort()).toEqual(['receiver_id', 'topic_id']);
     // U2 -> U3 same topic: only 3 unseen questions remain for U3 (1E/1M/1H) -> refuse with a useful message
     await expectError(db.rpc(ANON, 'participant_create_challenge', { p_game_id: g.gameId, p_token: pl.U2.token, p_receiver_id: pl.U3.id, p_topic_id: t }), /Not enough unseen easy questions left for U3 in "Movies & Entertainment"/);
     // U2 -> U1 (different receiver) reuses pool questions successfully
