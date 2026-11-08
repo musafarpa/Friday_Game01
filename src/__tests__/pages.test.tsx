@@ -393,7 +393,32 @@ describe('LeaderboardPage', () => {
       </MemoryRouter>
     );
   const row = (id: string, name: string, pts: number, rank: number) => ({
-    participant_id: id, display_name: name, player_code: name[0], total_points: pts, correct_answers: pts / 10, wrong_answers: 0, challenges_completed: 1, challenges_received: 1, rank,
+    participant_id: id, display_name: name, player_code: name[0], total_points: pts, correct_answers: pts / 10, wrong_answers: 0, challenges_completed: 1, challenges_received: 1, average_points: pts, rank,
+  });
+  const noChallenge = (id: string, name: string, rank: number) => ({
+    participant_id: id, display_name: name, player_code: name[0], total_points: 0, correct_answers: 0, wrong_answers: 0, challenges_completed: 0, challenges_received: 0, average_points: null, rank,
+  });
+
+  it('ranks by AVERAGE per challenge: shows avg + total + challenges, and marks players nobody challenged', async () => {
+    svc.getLeaderboard.mockResolvedValue({
+      game: { id: GAME, name: 'G', status: 'completed', is_final: true, ranking: 'average_per_challenge' },
+      rows: [
+        { ...row('1', 'Arun', 70, 1), average_points: 70 },                                   // 1 challenge, 70  -> avg 70
+        { ...row('2', 'Amal', 120, 2), challenges_received: 2, average_points: 60 },           // 2 challenges, 120 -> avg 60
+        noChallenge('3', 'Wade', 3),
+      ],
+    });
+    renderLb();
+    await screen.findByTestId('lb-mode');
+    expect(screen.getByTestId('ranking-note')).toHaveTextContent('average points per challenge');
+    expect(screen.getByTestId('avg-Arun')).toHaveTextContent('70');
+    expect(screen.getByTestId('avg-Amal')).toHaveTextContent('60');
+    expect(within(screen.getByTestId('lb-Arun')).getByText('#1')).toBeInTheDocument(); // fewer points in total, but higher average
+    expect(within(screen.getByTestId('lb-Amal')).getByText('120 pts')).toBeInTheDocument();
+    expect(screen.getByTestId('no-challenge-Wade')).toHaveTextContent('no challenge received');
+    expect(screen.getByTestId('avg-Wade')).toHaveTextContent('–');
+    expect(screen.getByTestId('champion')).toHaveTextContent('Arun');
+    expect(screen.getByTestId('champion')).not.toHaveTextContent('Wade');
   });
 
   it('final board: ties share a rank, co-champions are announced', async () => {
@@ -485,14 +510,14 @@ describe('admin helpers', () => {
   });
 
   it('leaderboard CSV escapes quotes/commas so names cannot corrupt (or inject into) the export', () => {
-    const csv = leaderboardCsv([{ rank: 1, player_code: 'A', display_name: 'Arun "The Ace", Jr', total_points: 70, correct_answers: 7, wrong_answers: 0 }]);
+    const csv = leaderboardCsv([{ rank: 1, player_code: 'A', display_name: 'Arun "The Ace", Jr', total_points: 70, correct_answers: 7, wrong_answers: 0, challenges_received: 1, average_points: 70 }]);
     const [header, line] = csv.split('\n');
-    expect(header).toBe('Rank,Player Code,Player Name,Score,Correct,Wrong');
-    expect(line).toBe('1,"A","Arun ""The Ace"", Jr",70,7,0');
+    expect(header).toBe('Rank,Player Code,Player Name,Score,Correct,Wrong,Challenges,Average');
+    expect(line).toBe('1,"A","Arun ""The Ace"", Jr",70,7,0,1,70');
   });
 
   it('leaderboard CSV neutralises spreadsheet formula injection in names', () => {
     const csv = leaderboardCsv([{ rank: 1, player_code: 'X', display_name: '=HYPERLINK("http://evil","x")', total_points: 0, correct_answers: 0, wrong_answers: 0 }]);
-    expect(csv.split('\n')[1]).toBe('1,"X","\'=HYPERLINK(""http://evil"",""x"")",0,0,0');
+    expect(csv.split('\n')[1]).toBe('1,"X","\'=HYPERLINK(""http://evil"",""x"")",0,0,0,,');
   });
 });

@@ -514,8 +514,11 @@ test('14. admin leaderboard tab: ranking, refresh, CSV export', async () => {
   expect(download.suggestedFilename()).toMatch(/Friday_Fun_QA_Test_leaderboard\.csv$/);
   const path = await download.path();
   const csv = (await import('node:fs')).readFileSync(path!, 'utf8');
-  expect(csv.split('\n')[0]).toBe('Rank,Player Code,Player Name,Score,Correct,Wrong');
-  expect(csv).toContain('"Amal",120');
+  expect(csv.split('\n')[0]).toBe('Rank,Player Code,Player Name,Score,Correct,Wrong,Challenges,Average');
+  expect(csv).toContain('"Amal",120,12,9,3,40'); // 3 challenges received, average 120/3 = 40
+  // fairness is visible in the UI: average column + "no challenge received" for players nobody picked
+  await expect(admin.getByTestId('lb-row-Amal')).toContainText('40');
+  await expect(admin.getByTestId('lb-row-Rahul')).toContainText('no challenge received');
 });
 
 test('15. a completed game accepts no new answers or challenges (server-side), even via direct API calls', async ({ request }) => {

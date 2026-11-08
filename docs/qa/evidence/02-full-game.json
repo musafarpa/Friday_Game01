@@ -138,7 +138,7 @@
   ],
   "network_bodies_inspected": {
     "Arun": 21,
-    "Rahul": 11,
+    "Rahul": 12,
     "Amal": 55,
     "Nikhil": 10
   },
@@ -151,9 +151,9 @@
     },
     {
       "display_name": "Arun",
-      "total_points": 40,
-      "correct_answers": 4,
-      "wrong_answers": 0
+      "total_points": 30,
+      "correct_answers": 3,
+      "wrong_answers": 1
     },
     {
       "display_name": "Nikhil",

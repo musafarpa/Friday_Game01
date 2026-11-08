@@ -91,7 +91,7 @@ describe('migration 20260104 - upgrade from legacy cloud state', () => {
 
   it('migrations apply in order from an empty database', async () => {
     const fresh = await createDb();
-    expect(migrationFiles()).toHaveLength(5);
+    expect(migrationFiles()).toHaveLength(6);
     const r = await fresh.q(SERVICE, `select count(*)::int c from public.topics`);
     expect(r[0].c).toBe(10);
   }, 120_000);

@@ -315,4 +315,31 @@ describe('end-to-end gameplay on a real Postgres: Friday Fun QA Test (A,B,C,D x 
     expect(v.game.points_correct).toBe(20);
     expect(v.progress.max_score).toBe(140);
   });
+
+  it('20. fair ranking: ranked by AVERAGE per received challenge; players nobody challenged are listed last (null average)', async () => {
+    const g = await seedGame(db, 'Average Ranking');
+    const pl = await addPlayers(db, g.gameId, [['X1', 'A'], ['X2', 'B'], ['X3', 'C'], ['X4', 'D']]);
+    await db.rpc(ADMIN, 'admin_set_game_status', { p_game_id: g.gameId, p_action: 'start' });
+    const mk = (from: string, to: string, topic: string) => db.rpc(ANON, 'participant_create_challenge', { p_game_id: g.gameId, p_token: pl[from].token, p_receiver_id: pl[to].id, p_topic_id: topic });
+    const a = await mk('X1', 'X3', g.topicIds[0]); // X3 gets TWO challenges: 70 + 0
+    const b = await mk('X2', 'X3', g.topicIds[1]);
+    const c = await mk('X4', 'X1', g.topicIds[2]); // X1 gets ONE challenge: 50
+    await play(db, a.raw_token, a.assignment_id, Array(7).fill('correct'));
+    await play(db, b.raw_token, b.assignment_id, Array(7).fill('wrong'));
+    await play(db, c.raw_token, c.assignment_id, ['correct', 'correct', 'correct', 'correct', 'correct', 'wrong', 'wrong']);
+
+    // live: finished challenges only, same fairness rule
+    const live = await db.rpc(ANON, 'get_leaderboard', { p_game_id: g.gameId });
+    expect(live.game.ranking).toBe('average_per_challenge');
+    expect(rank(live, 'X1')).toMatchObject({ total_points: 50, average_points: 50, rank: 1 });
+
+    await db.rpc(ADMIN, 'admin_set_game_status', { p_game_id: g.gameId, p_action: 'complete' });
+    const lb = await db.rpc(ANON, 'get_leaderboard', { p_game_id: g.gameId });
+    // X3 has MORE total points (70 > 50) but a LOWER average (35 < 50): X1 wins
+    expect(rank(lb, 'X1')).toMatchObject({ total_points: 50, challenges_received: 1, average_points: 50, rank: 1 });
+    expect(rank(lb, 'X3')).toMatchObject({ total_points: 70, challenges_received: 2, average_points: 35, rank: 2 });
+    // nobody challenged X2 / X4: no average, share the last rank
+    for (const n of ['X2', 'X4']) expect(rank(lb, n)).toMatchObject({ total_points: 0, challenges_received: 0, average_points: null, rank: 3 });
+    expect(lb.rows.map((r: any) => r.display_name).slice(0, 2)).toEqual(['X1', 'X3']);
+  });
 });

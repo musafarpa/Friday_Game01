@@ -5,15 +5,15 @@ import { PlayerAvatar } from '../../components/PlayerAvatar';
 import { AdminData } from './useAdminData';
 import { EmptyState, ghostBtn } from './ui';
 
-export function leaderboardCsv(rows: Array<{ rank: number; player_code: string; display_name: string; total_points: number; correct_answers: number; wrong_answers: number }>): string {
+export function leaderboardCsv(rows: Array<{ rank: number; player_code: string; display_name: string; total_points: number; correct_answers: number; wrong_answers: number; challenges_received?: number; average_points?: number | null }>): string {
   // quote everything; neutralise spreadsheet formulas (=, +, -, @) so a player name can't execute in Excel/Sheets
   const esc = (v: string | number) => {
     let t = String(v);
     if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
     return `"${t.replace(/"/g, '""')}"`;
   };
-  const header = ['Rank', 'Player Code', 'Player Name', 'Score', 'Correct', 'Wrong'];
-  return [header.join(','), ...rows.map((r) => [r.rank, esc(r.player_code), esc(r.display_name), r.total_points, r.correct_answers, r.wrong_answers].join(','))].join('\n');
+  const header = ['Rank', 'Player Code', 'Player Name', 'Score', 'Correct', 'Wrong', 'Challenges', 'Average'];
+  return [header.join(','), ...rows.map((r) => [r.rank, esc(r.player_code), esc(r.display_name), r.total_points, r.correct_answers, r.wrong_answers, r.challenges_received ?? '', r.average_points ?? ''].join(','))].join('\n');
 }
 
 export const LeaderboardTab: React.FC<{ d: AdminData }> = ({ d }) => {
@@ -33,7 +33,8 @@ export const LeaderboardTab: React.FC<{ d: AdminData }> = ({ d }) => {
     URL.revokeObjectURL(url);
   };
 
-  const top = rows.filter((r) => r.rank <= 3);
+  const hasAvg = (r: { average_points?: number | null }) => r.average_points !== null && r.average_points !== undefined;
+  const top = rows.filter((r) => r.rank <= 3 && hasAvg(r));
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -43,7 +44,7 @@ export const LeaderboardTab: React.FC<{ d: AdminData }> = ({ d }) => {
             <Badge variant={g.status === 'completed' ? 'purple' : 'cyan'} size="sm">{g.status === 'completed' ? 'FINAL' : 'LIVE'}</Badge>
           </h2>
           <p className="text-xs text-slate-400">
-            Scores are calculated on the server from stored answers ({g.settings.points_correct} pts per correct answer, max {7 * g.settings.points_correct} per challenge). Ties share a rank.
+            Scores are calculated on the server from stored answers ({g.settings.points_correct} pts per correct answer, max {7 * g.settings.points_correct} per challenge). Ranked by <strong>average points per challenge received</strong> so players who were picked more or less often are compared fairly. Ties share a rank.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -62,15 +63,15 @@ export const LeaderboardTab: React.FC<{ d: AdminData }> = ({ d }) => {
         <EmptyState title="No participants to rank yet" hint="Add participants to see them on the leaderboard." />
       ) : (
         <>
-          {rows.length >= 3 && rows[0].total_points > 0 && (
+          {rows.length >= 3 && hasAvg(rows[0]) && (rows[0].average_points ?? 0) > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto pt-4">
               {top.slice(0, 3).map((r) => (
                 <div key={r.participant_id} className={`p-6 rounded-2xl text-center flex flex-col items-center border ${r.rank === 1 ? 'bg-gradient-to-b from-amber-500/20 via-background-card to-background-card border-2 border-amber-500/40' : 'bg-background-card border-slate-700'}`}>
                   <div className={`w-9 h-9 rounded-full font-extrabold text-sm flex items-center justify-center mb-3 ${r.rank === 1 ? 'bg-gradient-to-r from-amber-400 to-yellow-500 text-black' : 'bg-slate-600 text-white'}`}>{r.rank}</div>
                   <PlayerAvatar displayName={r.display_name} playerCode={r.player_code} size="lg" />
                   <h4 className="mt-3 text-lg font-bold text-white">{r.display_name}</h4>
-                  <div className={`mt-1 text-2xl font-extrabold ${r.rank === 1 ? 'text-amber-400' : 'text-slate-300'}`}>{r.total_points} pts</div>
-                  <span className="text-xs text-slate-500">{r.correct_answers} correct</span>
+                  <div className={`mt-1 text-2xl font-extrabold ${r.rank === 1 ? 'text-amber-400' : 'text-slate-300'}`}>{r.average_points} avg</div>
+                  <span className="text-xs text-slate-500">{r.total_points} pts · {r.challenges_received} challenge(s) · {r.correct_answers} correct</span>
                 </div>
               ))}
             </div>
@@ -83,7 +84,8 @@ export const LeaderboardTab: React.FC<{ d: AdminData }> = ({ d }) => {
                   <tr>
                     <th className="py-3 px-4">Rank</th>
                     <th className="py-3 px-4">Participant</th>
-                    <th className="py-3 px-4">Score</th>
+                    <th className="py-3 px-4">Avg / challenge</th>
+                    <th className="py-3 px-4">Total</th>
                     <th className="py-3 px-4">Correct</th>
                     <th className="py-3 px-4">Wrong</th>
                     <th className="py-3 px-4">Challenges done</th>
@@ -95,7 +97,9 @@ export const LeaderboardTab: React.FC<{ d: AdminData }> = ({ d }) => {
                       <td className="py-3.5 px-4 font-mono font-bold text-slate-400">#{r.rank}</td>
                       <td className="py-3.5 px-4 font-bold text-white">
                         <span className="inline-flex items-center gap-2"><PlayerAvatar displayName={r.display_name} playerCode={r.player_code} size="sm" /> {r.display_name}</span>
+                        {!hasAvg(r) && <span className="block text-[11px] font-normal text-slate-500">no challenge received</span>}
                       </td>
+                      <td className="py-3.5 px-4 font-extrabold text-amber-300">{hasAvg(r) ? r.average_points : '–'}</td>
                       <td className="py-3.5 px-4 font-extrabold text-indigo-400">{r.total_points} pts</td>
                       <td className="py-3.5 px-4 text-emerald-400 font-semibold">{r.correct_answers}</td>
                       <td className="py-3.5 px-4 text-rose-400 font-semibold">{r.wrong_answers}</td>

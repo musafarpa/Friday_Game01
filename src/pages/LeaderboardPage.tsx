@@ -95,7 +95,9 @@ export const LeaderboardPage: React.FC = () => {
     );
   }
 
-  const podium = rows.filter((r) => r.rank <= 3);
+  // ranking is by AVERAGE points per received challenge; players nobody challenged have no average
+  const hasAvg = (r: { average_points?: number | null }) => r.average_points !== null && r.average_points !== undefined;
+  const podium = rows.filter((r) => r.rank <= 3 && hasAvg(r));
 
   return (
     <div className="min-h-screen bg-background text-slate-100 flex flex-col overflow-x-hidden">
@@ -124,11 +126,12 @@ export const LeaderboardPage: React.FC = () => {
             <span data-testid="lb-mode">{final ? 'FINAL RESULTS' : board?.game.status === 'cancelled' ? 'CANCELLED' : 'LIVE'}</span>
           </Badge>
         </div>
+        <p className="text-xs text-slate-500 -mt-3 mb-4" data-testid="ranking-note">Ranked by <strong>average points per challenge</strong>, so players who were picked more (or less) often are compared fairly.</p>
         {!final && (
           <p className="text-xs text-slate-500 -mt-3 mb-6">Live standings count finished challenges only. Full results are published when the host completes the game.</p>
         )}
 
-        {final && champion && champion.total_points > 0 && (
+        {final && champion && hasAvg(champion) && (champion.average_points ?? 0) > 0 && (
           <section className="mb-10 p-6 sm:p-12 rounded-3xl bg-gradient-to-b from-amber-500/20 via-background-card to-background-card border-2 border-amber-500/40 text-center shadow-2xl" data-testid="champion">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/20 text-amber-300 font-extrabold text-xs uppercase tracking-wider mb-4 border border-amber-500/30">
               <Crown className="w-4 h-4 text-amber-400" />
@@ -138,18 +141,20 @@ export const LeaderboardPage: React.FC = () => {
               <PlayerAvatar displayName={champion.display_name} playerCode={champion.player_code} size="xl" />
             </div>
             <h2 className="text-2xl sm:text-5xl font-black text-white tracking-tight break-words">Congratulations, {podium.filter((r) => r.rank === 1).map((r) => r.display_name).join(' & ')}! 🏆</h2>
-            <p className="text-amber-400 text-2xl sm:text-3xl font-black mt-2">{champion.total_points} Points</p>
+            <p className="text-amber-400 text-2xl sm:text-3xl font-black mt-2">{champion.average_points} avg per challenge</p>
+            <p className="text-slate-400 text-xs mt-1">{champion.total_points} total points over {champion.challenges_received} challenge(s)</p>
           </section>
         )}
 
-        {rows.length >= 3 && rows[0].total_points > 0 && (
+        {rows.length >= 3 && hasAvg(rows[0]) && (rows[0].average_points ?? 0) > 0 && (
           <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 items-end">
             {podium.slice(0, 3).map((r) => (
               <div key={r.participant_id} className={`p-6 rounded-2xl bg-background-card text-center flex flex-col items-center ${r.rank === 1 ? 'border-2 border-amber-500/40 shadow-xl shadow-amber-500/10' : 'border border-slate-700'}`}>
                 <div className="text-2xl mb-2">{r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : '🥉'}</div>
                 <PlayerAvatar displayName={r.display_name} playerCode={r.player_code} size="lg" />
                 <h4 className="mt-3 text-lg font-bold text-white">{r.display_name}</h4>
-                <div className={`text-xl font-extrabold mt-1 ${r.rank === 1 ? 'text-amber-400' : 'text-slate-300'}`}>{r.total_points} pts</div>
+                <div className={`text-xl font-extrabold mt-1 ${r.rank === 1 ? 'text-amber-400' : 'text-slate-300'}`}>{r.average_points} avg</div>
+                <div className="text-[11px] text-slate-500">{r.total_points} pts · {r.challenges_received} challenge(s)</div>
               </div>
             ))}
           </section>
@@ -165,7 +170,9 @@ export const LeaderboardPage: React.FC = () => {
                 <tr>
                   <th className="py-3.5 px-4 sm:px-6">Rank</th>
                   <th className="py-3.5 px-4 sm:px-6">Player</th>
-                  <th className="py-3.5 px-4 sm:px-6">Total Score</th>
+                  <th className="py-3.5 px-4 sm:px-6">Avg / challenge</th>
+                  <th className="py-3.5 px-4 sm:px-6">Total</th>
+                  <th className="py-3.5 px-4 sm:px-6 hidden sm:table-cell">Challenges</th>
                   <th className="py-3.5 px-4 sm:px-6 hidden sm:table-cell">Correct</th>
                   <th className="py-3.5 px-4 sm:px-6 hidden sm:table-cell">Wrong</th>
                 </tr>
@@ -177,10 +184,15 @@ export const LeaderboardPage: React.FC = () => {
                     <td className="py-4 px-4 sm:px-6">
                       <div className="flex items-center gap-3">
                         <PlayerAvatar displayName={r.display_name} playerCode={r.player_code} size="sm" />
-                        <span className="font-bold text-white">{r.display_name}</span>
+                        <div>
+                          <span className="font-bold text-white block">{r.display_name}</span>
+                          {!hasAvg(r) && <span className="text-[11px] text-slate-500" data-testid={`no-challenge-${r.display_name}`}>no challenge received</span>}
+                        </div>
                       </div>
                     </td>
+                    <td className="py-4 px-4 sm:px-6 font-extrabold text-amber-300 text-base" data-testid={`avg-${r.display_name}`}>{hasAvg(r) ? r.average_points : '–'}</td>
                     <td className="py-4 px-4 sm:px-6 font-extrabold text-indigo-400 text-base">{r.total_points} pts</td>
+                    <td className="py-4 px-4 sm:px-6 text-slate-300 hidden sm:table-cell">{r.challenges_completed} / {r.challenges_received}</td>
                     <td className="py-4 px-4 sm:px-6 text-emerald-400 font-bold hidden sm:table-cell">{r.correct_answers}</td>
                     <td className="py-4 px-4 sm:px-6 text-rose-400 font-bold hidden sm:table-cell">{r.wrong_answers}</td>
                   </tr>

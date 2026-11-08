@@ -243,11 +243,13 @@ export interface LeaderboardRow {
   wrong_answers: number;
   challenges_completed: number;
   challenges_received: number;
+  /** total points / challenges received (1 decimal). null when the player received no challenge. */
+  average_points?: number | null;
   rank: number;
 }
 
 export interface LeaderboardPayload {
-  game: { id: string; name: string; status: GameStatus; is_final: boolean };
+  game: { id: string; name: string; status: GameStatus; is_final: boolean; ranking?: string };
   rows: LeaderboardRow[];
 }
 
