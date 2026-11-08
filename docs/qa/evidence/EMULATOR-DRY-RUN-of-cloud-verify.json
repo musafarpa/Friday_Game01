@@ -1,0 +1,202 @@
+{
+  "target": "http://127.0.0.1:54321",
+  "ran_at": "2026-11-08T07:30:49.206Z",
+  "results": [
+    {
+      "name": "migration 20260104 present (participant_join callable)",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "anon sees no rows in participants",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "anon sees no rows in assignments",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "anon sees no rows in questions",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "anon sees no rows in answers",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "anon sees no rows in scores",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "anon sees no rows in participant_secrets",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "anon sees no rows in assignment_secrets",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "anon sees no rows in game_events",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "anon sees no rows in app_settings",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "no public games.settings contains a question pool / correct answers",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "legacy RPC get_participant_by_token is gone",
+      "status": "PASS",
+      "detail": "Could not find the function public.get_participant_by_token() in the schema cache"
+    },
+    {
+      "name": "legacy RPC create_challenge_assignment is gone",
+      "status": "PASS",
+      "detail": "Could not find the function public.create_challenge_assignment() in the schema cache"
+    },
+    {
+      "name": "legacy RPC delete_game_room is gone",
+      "status": "PASS",
+      "detail": "Could not find the function public.delete_game_room() in the schema cache"
+    },
+    {
+      "name": "legacy RPC reveal_round_answers is gone",
+      "status": "PASS",
+      "detail": "Could not find the function public.reveal_round_answers() in the schema cache"
+    },
+    {
+      "name": "admin sign-in + is_admin()",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "anon is_admin() is false",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "anon denied admin RPC",
+      "status": "PASS",
+      "detail": "permission denied for function admin_topic_stats"
+    },
+    {
+      "name": "pool: every topic has >=7 valid questions (3E/3M/1H)",
+      "status": "PASS",
+      "detail": "[\"AI & Technology:10\",\"Cricket & Sports:10\",\"Movies & Entertainment:10\"]"
+    },
+    {
+      "name": "start refused below minimum participants",
+      "status": "PASS",
+      "detail": "Cannot start game: At least 3 participants are required but only 2 added."
+    },
+    {
+      "name": "invite tokens unique",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Realtime channels SUBSCRIBED (admin + anon)",
+      "status": "PASS",
+      "detail": "subscribed=2"
+    },
+    {
+      "name": "start succeeds with min players + valid pools",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "4 challenges created",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "challenge 1: 7 ordered questions, 3E/3M/1H, correct topic",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "challenge 2: 7 ordered questions, 3E/3M/1H, correct topic",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "challenge 3: 7 ordered questions, 3E/3M/1H, correct topic",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "challenge 4: 7 ordered questions, 3E/3M/1H, correct topic",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "second challenge from the same sender refused",
+      "status": "PASS",
+      "detail": "You have already sent your challenge."
+    },
+    {
+      "name": "answers/score hidden before completion",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "live leaderboard: Amal 120 (3 finished challenges), Arun 0 (in progress)",
+      "status": "PASS",
+      "detail": "[\"Amal:120\",\"Arun:0\",\"Nikhil:0\",\"Rahul:0\"]"
+    },
+    {
+      "name": "REAL Realtime delivered answer/assignment events to the admin",
+      "status": "PASS",
+      "detail": "52 events"
+    },
+    {
+      "name": "REAL Realtime delivered games events to anon but NO answers events (RLS)",
+      "status": "PASS",
+      "detail": "games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE,games:UPDATE"
+    },
+    {
+      "name": "complete game",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "final leaderboard: Amal 120 #1; Arun 30-40; Rahul & Nikhil tie at 0 (rank 3)",
+      "status": "PASS",
+      "detail": "[\"1.Amal:120\",\"2.Arun:30\",\"3.Nikhil:0\",\"3.Rahul:0\"]"
+    },
+    {
+      "name": "completed game rejects new answers",
+      "status": "PASS",
+      "detail": "This game has finished. Answers are no longer accepted."
+    },
+    {
+      "name": "delete of an in-progress game is refused",
+      "status": "PASS",
+      "detail": "Game \"QA-DISPOSABLE-20261108073043-CANCEL\" is in progress. Cancel or complete it before deleting."
+    },
+    {
+      "name": "cancelled game: link shows cancelled, no questions",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "cancelled game cannot be restarted",
+      "status": "PASS",
+      "detail": "A cancelled game cannot be restarted."
+    }
+  ],
+  "NOTE": "DRY RUN against the LOCAL EMULATOR (not the cloud project). Proves the script logic; cloud evidence does not exist yet."
+}

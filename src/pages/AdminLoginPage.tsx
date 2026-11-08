@@ -1,17 +1,28 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Shield, Eye, EyeOff, Lock, Mail, ArrowLeft, AlertCircle, Sparkles } from 'lucide-react';
 import { gameService } from '../services/gameService';
 import { isSupabaseConfigured } from '../lib/supabase';
 
 export const AdminLoginPage: React.FC = () => {
-  const [email, setEmail] = useState('admin@fridayfun.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [resetMsg, setResetMsg] = useState('');
   const navigate = useNavigate();
+
+  // Session persistence: an already-signed-in admin goes straight to the dashboard.
+  useEffect(() => {
+    let alive = true;
+    gameService.checkIsAdmin().then((ok) => {
+      if (alive && ok) navigate('/admin', { replace: true });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [navigate]);
 
   const handleResetPassword = async () => {
     if (!email.trim()) {
@@ -78,14 +89,13 @@ export const AdminLoginPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Demo Mode Notice if Supabase is not yet configured */}
         {!isSupabaseConfigured && (
-          <div className="mt-6 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs flex items-start gap-2.5">
-            <Sparkles className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+          <div role="alert" className="mt-6 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-200 text-xs flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
             <div>
-              <p className="font-semibold">Local Interactive Mode Active</p>
-              <p className="mt-0.5 text-amber-300/80">
-                You can log in with <code className="bg-amber-950/60 px-1 py-0.5 rounded">admin@fridayfun.com</code> and any 6+ char password to test the complete dashboard right away!
+              <p className="font-semibold">Backend not configured</p>
+              <p className="mt-0.5 text-rose-200/80">
+                This deployment is missing <code>VITE_SUPABASE_URL</code> / <code>VITE_SUPABASE_PUBLISHABLE_KEY</code>, so sign-in is disabled.
               </p>
             </div>
           </div>
@@ -135,7 +145,7 @@ export const AdminLoginPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleResetPassword}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold"
+                    className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold min-h-[44px] px-2 -mr-2 inline-flex items-center"
                   >
                     Forgot password?
                   </button>

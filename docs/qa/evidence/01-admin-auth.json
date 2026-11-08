@@ -1,0 +1,12 @@
+{
+  "unauthorised /admin redirect": "PASS",
+  "incorrect password": "PASS",
+  "empty password": "PASS",
+  "forgot password": "PASS (request accepted by auth; e-mail delivery not testable locally)",
+  "non-admin user refused": "PASS",
+  "session persists after refresh": "PASS",
+  "logout": "PASS",
+  "expired session": "PASS",
+  "re-login after expiry": "PASS",
+  "forged token rejected": "PASS"
+}

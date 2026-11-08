@@ -1,349 +1,264 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { gameService, initLocalMockData } from '../services/gameService';
-import { hashToken, generateSecureToken } from '../lib/crypto';
-import { QUESTION_BANK, getRandomQuestionForTopic } from '../data/questionBank';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-describe('Friday Fun 2026 - Core Game Engine & Functional QA', () => {
-  beforeEach(() => {
-    localStorage.clear();
-    initLocalMockData(true);
+// ---- Mocked Supabase client: we assert exactly which database operations the service performs ----
+const h = vi.hoisted(() => {
+  const state = {
+    rpcResult: { data: null as any, error: null as any },
+    rpcCalls: [] as Array<{ fn: string; args: any }>,
+    rpcByName: {} as Record<string, { data: any; error: any }>,
+    tableResult: { data: [] as any, error: null as any, count: 0 as number | null },
+    tableCalls: [] as Array<{ table: string; ops: any[] }>,
+    session: { data: { session: { access_token: 't' } }, error: null } as any,
+    user: { data: { user: { id: 'u1' } }, error: null } as any,
+    signIn: { data: {}, error: null } as any,
+    signOutCalls: 0,
+  };
+  const chain = (table: string) => {
+    const ops: any[] = [];
+    state.tableCalls.push({ table, ops });
+    const p: any = new Proxy(function () {}, {
+      get(_t, prop: string) {
+        if (prop === 'then') return (res: any, rej: any) => Promise.resolve(state.tableResult).then(res, rej);
+        return (...args: any[]) => {
+          ops.push([prop, ...args]);
+          return p;
+        };
+      },
+    });
+    return p;
+  };
+  const supabase = {
+    rpc: vi.fn(async (fn: string, args: any) => {
+      state.rpcCalls.push({ fn, args });
+      return state.rpcByName[fn] ?? state.rpcResult;
+    }),
+    from: vi.fn((t: string) => chain(t)),
+    auth: {
+      getSession: vi.fn(async () => state.session),
+      getUser: vi.fn(async () => state.user),
+      signInWithPassword: vi.fn(async () => state.signIn),
+      signOut: vi.fn(async () => { state.signOutCalls++; return { error: null }; }),
+      onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+      resetPasswordForEmail: vi.fn(async () => ({ error: null })),
+    },
+    channel: vi.fn(() => ({ on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() })),
+    removeChannel: vi.fn(),
+  };
+  return { state, supabase };
+});
+
+vi.mock('../lib/supabase', () => ({ supabase: h.supabase, isSupabaseConfigured: true, supabaseUrl: 'https://x.supabase.co' }));
+
+import { gameService, friendlyError } from '../services/gameService';
+
+const GAME = '11111111-1111-1111-1111-111111111111';
+
+beforeEach(() => {
+  h.state.rpcResult = { data: null, error: null };
+  h.state.rpcByName = {};
+  h.state.rpcCalls.length = 0;
+  h.state.tableCalls.length = 0;
+  h.state.tableResult = { data: [], error: null, count: 0 };
+  h.state.session = { data: { session: { access_token: 't' } }, error: null };
+  h.state.user = { data: { user: { id: 'u1' } }, error: null };
+  h.state.signIn = { data: {}, error: null };
+  h.state.signOutCalls = 0;
+});
+
+describe('friendlyError', () => {
+  it('maps network failures, auth failures and missing-migration errors to actionable messages', () => {
+    expect(friendlyError(new TypeError('Failed to fetch'))).toMatch(/Cannot reach the database/);
+    expect(friendlyError({ message: 'permission denied for function admin_delete_game' })).toMatch(/not authorised/);
+    expect(friendlyError({ message: 'JWT expired' })).toMatch(/session has expired/);
+    expect(friendlyError({ message: 'Could not find the function public.admin_pool_status in the schema cache' })).toMatch(/migration/i);
+    expect(friendlyError({ message: 'Game name cannot be empty.' })).toBe('Game name cannot be empty.');
+    expect(friendlyError(null, 'fallback')).toBe('fallback');
+  });
+});
+
+describe('admin authentication', () => {
+  it('checkIsAdmin is false without a session, with an invalid user, or when is_admin() is false', async () => {
+    h.state.session = { data: { session: null }, error: null };
+    expect(await gameService.checkIsAdmin()).toBe(false);
+
+    h.state.session = { data: { session: { access_token: 't' } }, error: null };
+    h.state.user = { data: { user: null }, error: { message: 'expired' } };
+    expect(await gameService.checkIsAdmin()).toBe(false);
+
+    h.state.user = { data: { user: { id: 'u' } }, error: null };
+    h.state.rpcResult = { data: false, error: null };
+    expect(await gameService.checkIsAdmin()).toBe(false);
+
+    h.state.rpcResult = { data: true, error: null };
+    expect(await gameService.checkIsAdmin()).toBe(true);
   });
 
-  // 1. Admin Authentication Tests
-  describe('1. Admin Authentication', () => {
-    it('should successfully log in with valid admin credentials', async () => {
-      const res = await gameService.loginAdmin('admin@fridayfun.com', 'admin123');
-      expect(res.success).toBe(true);
-      const isAdmin = await gameService.checkIsAdmin();
-      expect(isAdmin).toBe(true);
-    });
+  it('loginAdmin: validates input, surfaces wrong passwords, and signs out non-admin accounts', async () => {
+    expect((await gameService.loginAdmin('', 'x')).error).toMatch(/Email cannot be empty/);
+    expect((await gameService.loginAdmin('a@b.c', '')).error).toMatch(/Password cannot be empty/);
 
-    it('should reject empty email or empty password', async () => {
-      const resEmptyEmail = await gameService.loginAdmin('', 'password123');
-      expect(resEmptyEmail.success).toBe(false);
-      expect(resEmptyEmail.error).toContain('Email cannot be empty');
+    h.state.signIn = { data: {}, error: { message: 'Invalid login credentials' } };
+    const bad = await gameService.loginAdmin('a@b.c', 'wrong');
+    expect(bad).toEqual({ success: false, error: 'Invalid login credentials' });
+    expect(h.state.signOutCalls).toBe(0);
 
-      const resEmptyPass = await gameService.loginAdmin('admin@test.com', '');
-      expect(resEmptyPass.success).toBe(false);
-      expect(resEmptyPass.error).toContain('Password cannot be empty');
-    });
+    h.state.signIn = { data: {}, error: null };
+    h.state.rpcResult = { data: false, error: null }; // authenticated but not in public.admins
+    const nonAdmin = await gameService.loginAdmin('player@b.c', 'pw');
+    expect(nonAdmin.success).toBe(false);
+    expect(nonAdmin.error).toMatch(/does not have Admin privileges/);
+    expect(h.state.signOutCalls).toBe(1);
 
-    it('should properly log out admin and revoke admin session', async () => {
-      await gameService.loginAdmin('admin@fridayfun.com', 'admin123');
-      expect(await gameService.checkIsAdmin()).toBe(true);
+    h.state.rpcResult = { data: true, error: null };
+    expect(await gameService.loginAdmin('admin@b.c', 'pw')).toEqual({ success: true });
+  });
+});
 
-      await gameService.logoutAdmin();
-      expect(await gameService.checkIsAdmin()).toBe(false);
-    });
+describe('game lifecycle calls hit the server-side RPCs with the right arguments', () => {
+  it.each(['open_registration', 'start', 'pause', 'resume', 'complete', 'cancel'] as const)('setGameStatus(%s)', async (action) => {
+    h.state.rpcResult = { data: { status: 'x', previous_status: 'y' }, error: null };
+    await gameService.setGameStatus(GAME, action);
+    expect(h.state.rpcCalls).toEqual([{ fn: 'admin_set_game_status', args: { p_game_id: GAME, p_action: action } }]);
   });
 
-  // 2. Game Management Tests
-  describe('2. Game Management & Validation', () => {
-    it('should create a new game with default settings', async () => {
-      const game = await gameService.createGame(
-        'QA Championship 2026',
-        'Automated test room',
-        { min_participants: 3, max_participants: 20, points_correct: 10 }
-      );
-
-      expect(game).toBeDefined();
-      expect(game.name).toBe('QA Championship 2026');
-      expect(game.status).toBe('registration_open');
-      expect(game.settings.min_participants).toBe(3);
-      expect(game.settings.points_correct).toBe(10);
-    });
-
-    it('should reject invalid game configurations (empty name, max < min)', async () => {
-      await expect(
-        gameService.createGame('', 'test', { min_participants: 3 })
-      ).rejects.toThrow('Game name cannot be empty');
-
-      await expect(
-        gameService.createGame('Invalid Room', 'test', { min_participants: 10, max_participants: 4 })
-      ).rejects.toThrow('Maximum participants cannot be less than minimum participants');
-
-      await expect(
-        gameService.createGame('Invalid Min', 'test', { min_participants: 1 })
-      ).rejects.toThrow('Minimum participants must be at least 2');
-    });
-
-    it('should transition game status: active, pause, complete, cancel', async () => {
-      const game = await gameService.createGame('Status Test Game', 'testing', {});
-      
-      // Verify hard gate blocks activation when topics lack 7 questions
-      await expect(gameService.updateGameStatus(game.id, 'active')).rejects.toThrow(
-        /minimum 7 questions/i
-      );
-
-      // Populate pool (7 questions per topic)
-      await gameService.generateQuestionPoolForGame(game.id, undefined, 7);
-
-      await gameService.updateGameStatus(game.id, 'active');
-      let updated = await gameService.getGame(game.id);
-      expect(updated?.status).toBe('active');
-
-      await gameService.updateGameStatus(game.id, 'waiting_for_answers');
-      updated = await gameService.getGame(game.id);
-      expect(updated?.status).toBe('waiting_for_answers');
-
-      await gameService.updateGameStatus(game.id, 'completed');
-      updated = await gameService.getGame(game.id);
-      expect(updated?.status).toBe('completed');
-    });
+  it('server validation errors (e.g. start gate) reach the caller verbatim', async () => {
+    h.state.rpcResult = { data: null, error: { message: 'Cannot start game: At least 3 participants are required but only 1 added.' } };
+    await expect(gameService.setGameStatus(GAME, 'start')).rejects.toThrow('Cannot start game: At least 3 participants are required but only 1 added.');
   });
 
-  // 3. Participant Management & Token Hashing
-  describe('3. Participant Management & Cryptographic Security', () => {
-    it('should add participants with unique codes (A, B, C, D)', async () => {
-      const game = await gameService.createGame('Roster Game', 'test', {});
-
-      const { participant: pA, rawToken: tokenA } = await gameService.addParticipant(game.id, 'Arun', 'A');
-      const { participant: pB, rawToken: tokenB } = await gameService.addParticipant(game.id, 'Rahul', 'B');
-      const { participant: pC, rawToken: tokenC } = await gameService.addParticipant(game.id, 'Amal', 'C');
-      const { participant: pD, rawToken: tokenD } = await gameService.addParticipant(game.id, 'Nikhil', 'D');
-
-      expect(pA.player_code).toBe('A');
-      expect(pB.player_code).toBe('B');
-      expect(pC.player_code).toBe('C');
-      expect(pD.player_code).toBe('D');
-
-      // Tokens must be unique and unguessable
-      expect(tokenA).not.toBe(tokenB);
-      expect(tokenB).not.toBe(tokenC);
-      expect(tokenC).not.toBe(tokenD);
-      expect(tokenA.length).toBeGreaterThanOrEqual(32);
-
-      // Verify SHA-256 hash
-      const expectedHashA = await hashToken(tokenA);
-      expect(pA.invitation_token_hash).toBe(expectedHashA);
-    });
-
-    it('should reject duplicate player codes within the same game', async () => {
-      const game = await gameService.createGame('Duplicate Test', 'test', {});
-      await gameService.addParticipant(game.id, 'Arun', 'A');
-
-      await expect(
-        gameService.addParticipant(game.id, 'Another Arun', 'A')
-      ).rejects.toThrow('already taken');
-    });
-
-    it('should allow editing a participant name and player code', async () => {
-      const game = await gameService.createGame('Edit Participant Game', 'test', {});
-      const { participant: p } = await gameService.addParticipant(game.id, 'Arun', 'A');
-
-      const updated = await gameService.updateParticipant(p.id, {
-        displayName: 'Arun Kumar',
-        playerCode: 'A1',
-      });
-
-      expect(updated?.display_name).toBe('Arun Kumar');
-      expect(updated?.player_code).toBe('A1');
-    });
+  it('deleteGame / cleanup use the protected RPCs (no direct table delete fallback)', async () => {
+    h.state.rpcResult = { data: { name: 'G', participants_removed: 2, challenges_removed: 1, answers_removed: 3 }, error: null };
+    await gameService.deleteGame(GAME);
+    h.state.rpcResult = { data: { cleaned_count: 0, games: [] }, error: null };
+    await gameService.cleanupFinishedGames(24);
+    expect(h.state.rpcCalls.map((c) => c.fn)).toEqual(['admin_delete_game', 'cleanup_completed_games']);
+    expect(h.state.tableCalls.filter((c) => c.ops.some((o) => o[0] === 'delete'))).toHaveLength(0);
   });
 
-  // 4. Topic Management Tests
-  describe('4. Topic Management', () => {
-    it('should load default 10 categories', async () => {
-      const topics = await gameService.getTopics();
-      expect(topics.length).toBeGreaterThanOrEqual(10);
-      const names = topics.map((t) => t.name);
-      expect(names).toContain('Politics & Government');
-      expect(names).toContain('Pollution & Environment');
-      expect(names).toContain('AI & Technology');
-      expect(names).toContain('Kerala & Current Affairs');
-      expect(names).toContain('Cricket & Sports');
-    });
-
-    it('should toggle topic enabled/disabled status', async () => {
-      const topics = await gameService.getAllTopics();
-      const first = topics[0];
-
-      await gameService.toggleTopic(first.id, false);
-      const activeTopics = await gameService.getTopics();
-      expect(activeTopics.some((t) => t.id === first.id)).toBe(false);
-
-      await gameService.toggleTopic(first.id, true);
-      const reactivated = await gameService.getTopics();
-      expect(reactivated.some((t) => t.id === first.id)).toBe(true);
-    });
-
-    it('should add custom topic and prevent duplicates', async () => {
-      const newTopic = await gameService.addTopic('Space Exploration', 'NASA, ISRO, and cosmic science');
-      expect(newTopic.name).toBe('Space Exploration');
-
-      await expect(
-        gameService.addTopic('Space Exploration', 'Duplicate')
-      ).rejects.toThrow('already exists');
-    });
+  it('a failed delete is NOT silently retried with a direct DELETE (old behaviour) and rejects', async () => {
+    h.state.rpcResult = { data: null, error: { message: 'Game "X" is in progress. Cancel or complete it before deleting.' } };
+    await expect(gameService.deleteGame(GAME)).rejects.toThrow(/in progress/);
+    expect(h.state.tableCalls.filter((c) => c.ops.some((o) => o[0] === 'delete'))).toHaveLength(0);
   });
 
-  // 5. Complete Multiplayer Workflow Test (Phase 4 Matrix)
-  describe('5. Complete Multiplayer Challenge Workflow (A, B, C, D)', () => {
-    it('should execute full round matrix: A->C, B->D, C->A, D->B', async () => {
-      const game = await gameService.createGame('Multiplayer Blitz', 'test', {});
-      const round = await gameService.getActiveRound(game.id);
-      expect(round).toBeDefined();
+  it('createGame validates before calling the server and passes topics + rules', async () => {
+    await expect(gameService.createGame({ name: '  ', topicIds: ['t'] })).rejects.toThrow(/name cannot be empty/);
+    await expect(gameService.createGame({ name: 'G', topicIds: [] })).rejects.toThrow(/at least 1 topic/);
+    await expect(gameService.createGame({ name: 'G', topicIds: ['t'], rules: { min_participants: 5, max_participants: 3 } })).rejects.toThrow(/cannot be less than minimum/);
+    expect(h.state.rpcCalls).toHaveLength(0);
 
-      const { participant: pA, rawToken: tokenA } = await gameService.addParticipant(game.id, 'Arun', 'A');
-      const { participant: pB } = await gameService.addParticipant(game.id, 'Rahul', 'B');
-      const { participant: pC, rawToken: tokenC } = await gameService.addParticipant(game.id, 'Amal', 'C');
-      const { participant: pD } = await gameService.addParticipant(game.id, 'Nikhil', 'D');
-
-      const topics = await gameService.getTopics();
-      const topicPollution = topics.find((t) => t.name.includes('Pollution')) || topics[0];
-      const topicAI = topics.find((t) => t.name.includes('AI')) || topics[1];
-      const topicPolitics = topics.find((t) => t.name.includes('Politics')) || topics[2];
-      const topicCricket = topics.find((t) => t.name.includes('Cricket')) || topics[3];
-
-      // Rule: Self selection is rejected
-      await expect(
-        gameService.submitSelectionAndGenerateChallenge({
-          gameId: game.id,
-          roundId: round!.id,
-          senderId: pA.id,
-          receiverId: pA.id,
-          topicId: topicPollution.id,
-          topicName: topicPollution.name,
-        })
-      ).rejects.toThrow('Self-selection is not permitted');
-
-      // 1. A selects C (Pollution)
-      const challengeAC = await gameService.submitSelectionAndGenerateChallenge({
-        gameId: game.id,
-        roundId: round!.id,
-        senderId: pA.id,
-        receiverId: pC.id,
-        topicId: topicPollution.id,
-        topicName: topicPollution.name,
-      });
-      expect(challengeAC.assignment).toBeDefined();
-      expect(challengeAC.assignment.receiver_id).toBe(pC.id);
-
-      // 2. B selects D (AI & Technology)
-      const challengeBD = await gameService.submitSelectionAndGenerateChallenge({
-        gameId: game.id,
-        roundId: round!.id,
-        senderId: pB.id,
-        receiverId: pD.id,
-        topicId: topicAI.id,
-        topicName: topicAI.name,
-      });
-      expect(challengeBD.assignment.receiver_id).toBe(pD.id);
-
-      // 3. C selects A (Politics)
-      const challengeCA = await gameService.submitSelectionAndGenerateChallenge({
-        gameId: game.id,
-        roundId: round!.id,
-        senderId: pC.id,
-        receiverId: pA.id,
-        topicId: topicPolitics.id,
-        topicName: topicPolitics.name,
-      });
-      expect(challengeCA.assignment.receiver_id).toBe(pA.id);
-
-      // 4. D selects B (Cricket)
-      const challengeDB = await gameService.submitSelectionAndGenerateChallenge({
-        gameId: game.id,
-        roundId: round!.id,
-        senderId: pD.id,
-        receiverId: pB.id,
-        topicId: topicCricket.id,
-        topicName: topicCricket.name,
-      });
-      expect(challengeDB.assignment.receiver_id).toBe(pB.id);
-
-      // Verify Admin can see all 4 assignments
-      const liveAssignments = await gameService.getLiveAssignments(game.id);
-      expect(liveAssignments.length).toBe(4);
-
-      // 6. Test Multiple Incoming Challenges (A->C, B->C, D->C)
-      const challengeBC = await gameService.submitSelectionAndGenerateChallenge({
-        gameId: game.id,
-        roundId: round!.id,
-        senderId: pB.id,
-        receiverId: pC.id,
-        topicId: topicCricket.id,
-        topicName: topicCricket.name,
-      });
-      const incomingForC = await gameService.getIncomingChallenges(pC.id, game.id);
-      expect(incomingForC.length).toBeGreaterThanOrEqual(2);
+    h.state.rpcByName['admin_create_game'] = { data: { game_id: GAME }, error: null };
+    h.state.tableResult = { data: { id: GAME, name: 'G', status: 'registration_open', settings: {} }, error: null, count: 0 };
+    const g = await gameService.createGame({ name: ' G ', description: 'd', topicIds: ['t1', 't2'], rules: { points_correct: 12 } });
+    expect(g.id).toBe(GAME);
+    expect(h.state.rpcCalls[0]).toEqual({
+      fn: 'admin_create_game',
+      args: { p_name: 'G', p_description: 'd', p_settings: { points_correct: 12 }, p_topic_ids: ['t1', 't2'], p_initial_status: 'registration_open' },
     });
   });
+});
 
-  // 6. Quiz, Answering & Zero-Leak Protection
-  describe('6. Quiz Answering & Correct Answer Protection', () => {
-    it('should hide correct_option before round reveal and expose after reveal', async () => {
-      const game = await gameService.createGame('Quiz Game', 'test', {});
-      const round = await gameService.getActiveRound(game.id);
-      const { participant: pA } = await gameService.addParticipant(game.id, 'Arun', 'A');
-      const { participant: pB } = await gameService.addParticipant(game.id, 'Rahul', 'B');
-      const topics = await gameService.getTopics();
-
-      const { rawChallengeToken } = await gameService.submitSelectionAndGenerateChallenge({
-        gameId: game.id,
-        roundId: round!.id,
-        senderId: pA.id,
-        receiverId: pB.id,
-        topicId: topics[0].id,
-        topicName: topics[0].name,
-      });
-
-      // Fetch challenge as participant before reveal
-      const challengeBeforeReveal = await gameService.getChallengeByToken(rawChallengeToken);
-      expect(challengeBeforeReveal.question.correct_option).toBeNull();
-      expect(challengeBeforeReveal.question.explanation).toBeNull();
-
-      // Submit an answer (Option A)
-      const submitRes = await gameService.submitAnswer(rawChallengeToken, 'A');
-      expect(submitRes.success).toBe(true);
-
-      // Duplicate submission blocked
-      const duplicateRes = await gameService.submitAnswer(rawChallengeToken, 'B');
-      expect(duplicateRes.success).toBe(false);
-      expect(duplicateRes.error).toContain('already been submitted');
-
-      // Admin reveals round
-      await gameService.revealRound(round!.id, game.id);
-
-      // Fetch challenge after reveal
-      const challengeAfterReveal = await gameService.getChallengeByToken(rawChallengeToken);
-      expect(challengeAfterReveal.question.correct_option).not.toBeNull();
-      expect(['A', 'B', 'C', 'D']).toContain(challengeAfterReveal.question.correct_option);
-      expect(challengeAfterReveal.question.explanation).toBeDefined();
-    });
+describe('participants', () => {
+  it('getParticipants exposes the stored raw token for the admin (so Copy Invite Link copies a WORKING link)', async () => {
+    h.state.tableResult = {
+      data: [
+        { id: 'p1', game_id: GAME, display_name: 'Arun', player_code: 'A', status: 'pending', participant_secrets: { raw_token: 'tok-a' } },
+        { id: 'p2', game_id: GAME, display_name: 'Rahul', player_code: 'B', status: 'joined', participant_secrets: [{ raw_token: 'tok-b' }] },
+        { id: 'p3', game_id: GAME, display_name: 'Legacy', player_code: 'C', status: 'pending', participant_secrets: null },
+      ],
+      error: null,
+      count: 3,
+    };
+    const list = await gameService.getParticipants(GAME);
+    expect(list.map((p) => p.raw_invitation_token)).toEqual(['tok-a', 'tok-b', undefined]); // never falls back to a hash
+    expect(JSON.stringify(list)).not.toContain('participant_secrets');
+    expect(JSON.stringify(list)).not.toContain('invitation_token_hash');
   });
 
-  // 7. Scoring & Leaderboard Calculation
-  describe('7. Server-Side Scoring & Leaderboard Rankings', () => {
-    it('should calculate points correctly (+10 for correct, 0 for wrong)', async () => {
-      const game = await gameService.createGame('Scoring Game', 'test', { points_correct: 10, points_wrong: 0 });
-      const round = await gameService.getActiveRound(game.id);
-      const { participant: pA } = await gameService.addParticipant(game.id, 'Arun', 'A');
-      const { participant: pB } = await gameService.addParticipant(game.id, 'Rahul', 'B');
-      const topics = await gameService.getTopics();
+  it('addParticipant / update / remove / regenerate call the admin RPCs', async () => {
+    h.state.rpcResult = { data: { participant_id: 'p', display_name: 'Amal', player_code: 'C', raw_token: 'raw' }, error: null };
+    const r = await gameService.addParticipant(GAME, 'Amal', 'C', '+971');
+    expect(r).toEqual({ participantId: 'p', displayName: 'Amal', playerCode: 'C', rawToken: 'raw' });
+    await gameService.updateParticipant('p', { displayName: 'Amal K', playerCode: 'c' });
+    await gameService.removeParticipant('p');
+    h.state.rpcResult = { data: { raw_token: 'new' }, error: null };
+    expect(await gameService.regenerateInvitation('p')).toBe('new');
+    expect(h.state.rpcCalls.map((c) => c.fn)).toEqual(['admin_add_participant', 'admin_update_participant', 'admin_remove_participant', 'admin_regenerate_invitation']);
+    expect(h.state.rpcCalls[0].args).toEqual({ p_game_id: GAME, p_display_name: 'Amal', p_player_code: 'C', p_contact: '+971' });
+  });
 
-      const { assignment, rawChallengeToken } = await gameService.submitSelectionAndGenerateChallenge({
-        gameId: game.id,
-        roundId: round!.id,
-        senderId: pA.id,
-        receiverId: pB.id,
-        topicId: topics[0].id,
-        topicName: topics[0].name,
-      });
+  it('duplicate participant error from the server is shown unchanged', async () => {
+    h.state.rpcResult = { data: null, error: { message: 'A participant named "Arun" already exists in this game.' } };
+    await expect(gameService.addParticipant(GAME, 'arun', 'Z')).rejects.toThrow('A participant named "Arun" already exists in this game.');
+  });
+});
 
-      // Get actual correct option from storage to test exact scoring
-      const questions = JSON.parse(localStorage.getItem('friday_fun_2026_questions') || '[]');
-      const q = questions.find((item: any) => item.assignment_id === assignment.id);
-      const correctOpt = q.correct_option;
+describe('participant gameplay calls', () => {
+  it('joinGame returns null WITHOUT a network call for malformed game ids / empty tokens', async () => {
+    expect(await gameService.joinGame('not-a-uuid', 'tok')).toBeNull();
+    expect(await gameService.joinGame(GAME, '')).toBeNull();
+    expect(h.state.rpcCalls).toHaveLength(0);
+  });
 
-      // Submit correct answer
-      await gameService.submitAnswer(rawChallengeToken, correctOpt);
+  it('joinGame sends the RAW token (the server hashes it) and returns null for invalid links', async () => {
+    h.state.rpcResult = { data: null, error: null };
+    expect(await gameService.joinGame(GAME, 'abc'.repeat(20))).toBeNull();
+    expect(h.state.rpcCalls[0]).toEqual({ fn: 'participant_join', args: { p_game_id: GAME, p_token: 'abc'.repeat(20) } });
+  });
 
-      const leaderboard = await gameService.getLeaderboard(game.id);
-      const scoreB = leaderboard.find((s) => s.participant_id === pB.id);
+  it('createChallenge sends only ids + token (no client-chosen questions, answers or tokens)', async () => {
+    h.state.rpcResult = { data: { assignment_id: 'a', raw_token: 'r', total_questions: 7 }, error: null };
+    await gameService.createChallenge({ gameId: GAME, token: 'tok', receiverId: 'r1', topicId: 't1' });
+    expect(Object.keys(h.state.rpcCalls[0].args).sort()).toEqual(['p_game_id', 'p_receiver_id', 'p_token', 'p_topic_id']);
+  });
 
-      expect(scoreB?.correct_answers).toBe(1);
-      expect(scoreB?.total_points).toBe(10);
-    });
+  it('submitAnswer: rejects invalid options locally, maps ALREADY_ANSWERED, and never sends a score', async () => {
+    expect((await gameService.submitAnswer('t', 'Z' as any, 'q')).success).toBe(false);
+    expect(h.state.rpcCalls).toHaveLength(0);
+
+    h.state.rpcResult = { data: { is_completed: false, answered_count: 3 }, error: null };
+    expect(await gameService.submitAnswer('tok', 'B', 'q1')).toEqual({ success: true, is_completed: false, answered_count: 3 });
+    expect(h.state.rpcCalls[0].args).toEqual({ p_token: 'tok', p_selected_option: 'B', p_question_id: 'q1' });
+
+    h.state.rpcResult = { data: null, error: { message: 'ALREADY_ANSWERED: an answer has already been submitted for this question.' } };
+    const dup = await gameService.submitAnswer('tok', 'B', 'q1');
+    expect(dup).toMatchObject({ success: false, alreadyAnswered: true });
+
+    h.state.rpcResult = { data: null, error: { message: 'The game is paused by the host. Please try again shortly.' } };
+    expect((await gameService.submitAnswer('tok', 'B', 'q2')).error).toMatch(/paused by the host/);
+  });
+
+  it('network interruption becomes a friendly error, not a crash', async () => {
+    h.supabase.rpc.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await expect(gameService.getChallengeByToken('tok')).rejects.toThrow(/Cannot reach the database/);
+  });
+
+  it('getLeaderboard ignores malformed ids and otherwise calls get_leaderboard', async () => {
+    expect(await gameService.getLeaderboard('nope')).toBeNull();
+    h.state.rpcResult = { data: { game: {}, rows: [] }, error: null };
+    await gameService.getLeaderboard(GAME);
+    expect(h.state.rpcCalls[0].fn).toBe('get_leaderboard');
+  });
+});
+
+describe('topics', () => {
+  it('toggleTopic reports failure when no row was updated (e.g. not permitted) instead of pretending success', async () => {
+    h.state.tableResult = { data: [], error: null, count: 0 };
+    await expect(gameService.toggleTopic('t', false)).rejects.toThrow(/not updated/);
+    h.state.tableResult = { data: [{ id: 't' }], error: null, count: 1 };
+    await expect(gameService.toggleTopic('t', false)).resolves.toBeUndefined();
+  });
+
+  it('deleteTopic goes through the safe RPC; a used topic is refused with guidance', async () => {
+    h.state.rpcResult = { data: null, error: { message: 'Topic "Cricket & Sports" is used by 2 game(s) and 3 challenge(s). Disable it instead so history is preserved.' } };
+    await expect(gameService.deleteTopic('t')).rejects.toThrow(/Disable it instead/);
+    expect(h.state.rpcCalls[0].fn).toBe('admin_delete_topic');
+  });
+
+  it('addTopic rejects blank, over-long and duplicate names client-side', async () => {
+    await expect(gameService.addTopic('   ', '')).rejects.toThrow(/cannot be empty/);
+    await expect(gameService.addTopic('x'.repeat(61), '')).rejects.toThrow(/60 characters/);
+    h.state.tableResult = { data: [{ id: '1', name: 'Cricket & Sports', is_active: true }], error: null, count: 1 };
+    await expect(gameService.addTopic('cricket & sports', '')).rejects.toThrow(/already exists/);
   });
 });

@@ -1,8 +1,22 @@
 /**
  * Sharing and WhatsApp URL helpers for Friday Fun 2026
+ *
+ * Links are built from VITE_PUBLIC_BASE_URL when set (recommended for production so links never
+ * depend on which address the admin happened to open), otherwise from the current origin.
  */
 
+function envBaseUrl(): string {
+  try {
+    const v = (import.meta as any).env?.VITE_PUBLIC_BASE_URL as string | undefined;
+    return v ? v.replace(/\/+$/, '') : '';
+  } catch {
+    return '';
+  }
+}
+
 export function getBaseUrl(): string {
+  const configured = envBaseUrl();
+  if (configured) return configured;
   if (typeof window !== 'undefined' && window.location) {
     return window.location.origin;
   }
@@ -15,6 +29,10 @@ export function buildInvitationUrl(gameId: string, token: string): string {
 
 export function buildChallengeUrl(challengeToken: string): string {
   return `${getBaseUrl()}/challenge/${challengeToken}`;
+}
+
+export function buildLeaderboardUrl(gameId: string): string {
+  return `${getBaseUrl()}/leaderboard/${gameId}`;
 }
 
 export function generateInvitationWhatsAppUrl(participantName: string, inviteUrl: string): string {
@@ -67,4 +85,3 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     return false;
   }
 }
-

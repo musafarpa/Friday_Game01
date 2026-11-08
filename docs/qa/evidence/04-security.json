@@ -1,0 +1,40 @@
+{
+  "anon_row_counts": {
+    "participants": 0,
+    "assignments": 0,
+    "questions": 0,
+    "answers": 0,
+    "scores": 0,
+    "game_events": 0,
+    "participant_secrets": 0,
+    "assignment_secrets": 0,
+    "app_settings": 0,
+    "admins": 0
+  },
+  "games_settings_clean": true,
+  "exploit_chain_closed": true,
+  "admin_rpc_authorization": {
+    "admin_create_game": "anon + non-admin denied",
+    "admin_set_game_status": "anon + non-admin denied",
+    "admin_delete_game": "anon + non-admin denied",
+    "cleanup_completed_games": "anon + non-admin denied",
+    "admin_add_participant": "anon + non-admin denied",
+    "admin_remove_participant": "anon + non-admin denied",
+    "admin_regenerate_invitation": "anon + non-admin denied",
+    "admin_save_pool_questions": "anon + non-admin denied",
+    "admin_delete_topic": "anon + non-admin denied",
+    "admin_set_default_rules": "anon + non-admin denied"
+  },
+  "participant_isolation": "verified over real browser traffic",
+  "hostile_inputs": 6,
+  "forged_insert_statuses": {
+    "scores": 403,
+    "answers": 403,
+    "assignments": 403,
+    "questions": 403,
+    "participants": 403
+  },
+  "forged_writes_blocked": true,
+  "ai_endpoint_hardened": true,
+  "bundle_secret_scan": "clean"
+}

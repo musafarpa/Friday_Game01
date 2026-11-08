@@ -25,10 +25,14 @@ const isPlaceholderKey = (key: string) =>
   key.includes('YOUR_ACTUAL') ||
   key.includes('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...');
 
+// https in production; plain http is accepted ONLY for a local Supabase stack (supabase start / test emulator)
+const isSecureOrLocalUrl = (u: string) =>
+  u.startsWith('https://') || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(u);
+
 export const isSupabaseConfigured = Boolean(
   supabaseUrl &&
   supabasePublishableKey &&
-  supabaseUrl.startsWith('https://') &&
+  isSecureOrLocalUrl(supabaseUrl) &&
   !isPlaceholderKey(supabasePublishableKey) &&
   (supabasePublishableKey.startsWith('sb_publishable_') ||
    supabasePublishableKey.startsWith('eyJ') ||
@@ -95,4 +99,11 @@ export async function verifySupabaseConnection(): Promise<{
       projectUrl: supabaseUrl,
     };
   }
+}
+
+/** True when the app is running against localhost / a LAN address (links copied there will not work for others). */
+export function isLocalOrigin(): boolean {
+  if (typeof window === 'undefined' || !window.location) return false;
+  const h = window.location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || /^(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./.test(h);
 }

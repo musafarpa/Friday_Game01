@@ -1,0 +1,175 @@
+{
+  "pool_per_topic": [
+    {
+      "name": "AI & Technology",
+      "total": 10,
+      "easy": 4,
+      "medium": 4,
+      "hard": 2
+    },
+    {
+      "name": "Cricket & Sports",
+      "total": 10,
+      "easy": 4,
+      "medium": 4,
+      "hard": 2
+    },
+    {
+      "name": "Movies & Entertainment",
+      "total": 10,
+      "easy": 4,
+      "medium": 4,
+      "hard": 2
+    }
+  ],
+  "start_gate_message": "Cannot start game: At least 3 participants are required but only 2 added.",
+  "invite_urls_unique": true,
+  "copy_invite_link": "clipboard matched each participant link",
+  "whatsapp_href_sample": "https://wa.me/?text=Hello%20Amal!%20Welcome%20to%20Friday%20Fun%202026!%20%F0%9F%8E%89%0A%0AYour%20personal%20game%20inv",
+  "statuses_after_join": [
+    {
+      "display_name": "Arun",
+      "status": "joined"
+    },
+    {
+      "display_name": "Rahul",
+      "status": "joined"
+    },
+    {
+      "display_name": "Amal",
+      "status": "joined"
+    },
+    {
+      "display_name": "Nikhil",
+      "status": "joined"
+    }
+  ],
+  "challenges": [
+    {
+      "from": "Amal",
+      "to": "Arun",
+      "topic": "Movies & Entertainment",
+      "questions": 7,
+      "difficulties": [
+        "easy",
+        "easy",
+        "easy",
+        "medium",
+        "medium",
+        "medium",
+        "hard"
+      ]
+    },
+    {
+      "from": "Nikhil",
+      "to": "Amal",
+      "topic": "AI & Technology",
+      "questions": 7,
+      "difficulties": [
+        "easy",
+        "easy",
+        "easy",
+        "medium",
+        "medium",
+        "medium",
+        "hard"
+      ]
+    },
+    {
+      "from": "Rahul",
+      "to": "Amal",
+      "topic": "Cricket & Sports",
+      "questions": 7,
+      "difficulties": [
+        "easy",
+        "easy",
+        "easy",
+        "medium",
+        "medium",
+        "medium",
+        "hard"
+      ]
+    },
+    {
+      "from": "Arun",
+      "to": "Amal",
+      "topic": "Movies & Entertainment",
+      "questions": 7,
+      "difficulties": [
+        "easy",
+        "easy",
+        "easy",
+        "medium",
+        "medium",
+        "medium",
+        "hard"
+      ]
+    }
+  ],
+  "scores_per_challenge_before_complete": [
+    {
+      "sender": "Amal",
+      "receiver": "Arun",
+      "status": "opened",
+      "answered_questions": 3,
+      "current_score": 30
+    },
+    {
+      "sender": "Arun",
+      "receiver": "Amal",
+      "status": "submitted",
+      "answered_questions": 7,
+      "current_score": 70
+    },
+    {
+      "sender": "Nikhil",
+      "receiver": "Amal",
+      "status": "submitted",
+      "answered_questions": 7,
+      "current_score": 50
+    },
+    {
+      "sender": "Rahul",
+      "receiver": "Amal",
+      "status": "submitted",
+      "answered_questions": 7,
+      "current_score": 0
+    }
+  ],
+  "network_bodies_inspected": {
+    "Arun": 21,
+    "Rahul": 11,
+    "Amal": 55,
+    "Nikhil": 10
+  },
+  "final_scores_table": [
+    {
+      "display_name": "Amal",
+      "total_points": 120,
+      "correct_answers": 12,
+      "wrong_answers": 9
+    },
+    {
+      "display_name": "Arun",
+      "total_points": 40,
+      "correct_answers": 4,
+      "wrong_answers": 0
+    },
+    {
+      "display_name": "Nikhil",
+      "total_points": 0,
+      "correct_answers": 0,
+      "wrong_answers": 0
+    },
+    {
+      "display_name": "Rahul",
+      "total_points": 0,
+      "correct_answers": 0,
+      "wrong_answers": 0
+    }
+  ],
+  "direct_api_after_completion": {
+    "submit": "This game has finished. Answers are no longer accepted.",
+    "create": "This game has finished."
+  }
+}

@@ -1,63 +1,30 @@
 -- ==============================================================================
--- ADMIN PROVISIONING & QA TEST GAME SETUP - FRIDAY FUN GAME 2026
--- Run this in Supabase Dashboard SQL Editor:
--- https://supabase.com/dashboard/project/fchqdplgkxsdhcyjqqvz/sql/new
+-- ADMIN PROVISIONING - FRIDAY FUN GAME 2026
+-- Run ONCE in the Supabase Dashboard SQL Editor for the admin account(s) you create under
+--   Authentication -> Users -> Add user (email + strong password).
+--
+-- This script ONLY grants the admin role. It no longer creates a QA/test game and contains no
+-- hard-coded participant tokens (the old version seeded known token hashes into production).
 -- ==============================================================================
 
--- STEP 1: Auto-confirm the admin's email so login works immediately
-UPDATE auth.users
-SET email_confirmed_at = now()
-WHERE email = 'admin@fridayfun.com';
+-- 1. Set the admin's email here
+--    (replace the placeholder, keep the quotes)
+create temporary table if not exists _admin_email (email text);
+delete from _admin_email;
+insert into _admin_email values ('REPLACE-WITH-ADMIN-EMAIL@example.com');
 
--- STEP 2: Grant Admin privileges in public.admins
-INSERT INTO public.admins (user_id, email)
-SELECT id, email
-FROM auth.users
-WHERE email = 'admin@fridayfun.com'
-ON CONFLICT (user_id) DO NOTHING;
+-- 2. Confirm the email so the account can sign in immediately (skip if you use email confirmation)
+update auth.users
+   set email_confirmed_at = coalesce(email_confirmed_at, now())
+ where lower(email) = lower((select email from _admin_email));
 
--- STEP 3: Create the QA Test Game Room
-INSERT INTO public.games (name, description, game_date, status, settings)
-VALUES (
-    'FRIDAY FUN – QA TEST ROOM',
-    'Real Multiplayer QA Verification Game Room',
-    CURRENT_DATE,
-    'active',
-    '{
-        "min_participants": 3,
-        "max_participants": 30,
-        "questions_per_participant": 1,
-        "points_correct": 10,
-        "points_wrong": 0,
-        "difficulty_distribution": {"easy": 40, "medium": 40, "hard": 20},
-        "reveal_mode": "admin_manual_or_all",
-        "allow_multiple_incoming": true
-    }'::jsonb
-)
-ON CONFLICT DO NOTHING;
+-- 3. Grant admin privileges (fails loudly via the check below if the user does not exist)
+insert into public.admins (user_id, email)
+select id, email from auth.users where lower(email) = lower((select email from _admin_email))
+on conflict (user_id) do nothing;
 
--- STEP 4: Create Round 1
-INSERT INTO public.game_rounds (game_id, round_number, status)
-SELECT id, 1, 'active'
-FROM public.games
-WHERE name = 'FRIDAY FUN – QA TEST ROOM'
-LIMIT 1;
-
--- STEP 5: Insert the 4 QA Participants (Arun, Rahul, Amal, Nikhil)
-INSERT INTO public.participants (game_id, display_name, player_code, invitation_token_hash, status)
-SELECT 
-    g.id, 
-    p.display_name, 
-    p.player_code, 
-    p.invitation_token_hash, 
-    'joined'
-FROM public.games g
-CROSS JOIN (
-    VALUES 
-        ('Arun', 'A', '84664b36981c091fae9f99ed0a659830b4f94daf02723bdb61250aa966cfeee3'),
-        ('Rahul', 'B', '758d57b69851776f2955651d8a7d5ee54da12c2195b725baaf9790fdb86b9d26'),
-        ('Amal', 'C', 'a27eaf5655da1c1faf13429e822b6dda21e7e4ca82c2b06cf3fdd56d5327b493'),
-        ('Nikhil', 'D', '335c06ea6fb52b32bdb5455e57767d89d87e354492d9bc4c376e8fa7f01a65e9')
-) AS p(display_name, player_code, invitation_token_hash)
-WHERE g.name = 'FRIDAY FUN – QA TEST ROOM'
-ON CONFLICT DO NOTHING;
+-- 4. Verify: must return one row
+select a.email, a.created_at as admin_since
+  from public.admins a
+  join auth.users u on u.id = a.user_id
+ where lower(u.email) = lower((select email from _admin_email));

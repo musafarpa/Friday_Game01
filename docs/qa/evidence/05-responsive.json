@@ -1,0 +1,1541 @@
+{
+  "320/home": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/admin-login": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 44,
+      "label": "Back to Friday Fun Home"
+    },
+    "consoleErrors": 0
+  },
+  "320/join-waiting": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/join-select-challenge": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/join-challenge-sent": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/join-incoming-challenges": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/quiz-question": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/quiz-final-result": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/leaderboard-live": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/leaderboard-final": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/admin-overview": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "BUTTON"
+    },
+    "consoleErrors": 0
+  },
+  "320/admin-games": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/admin-participants": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "Share on WhatsApp"
+    },
+    "consoleErrors": 0
+  },
+  "320/admin-monitoring": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/admin-leaderboard": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/admin-topics": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/admin-settings": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/admin-create-game-modal": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "320/admin-confirm-dialog": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/home": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/admin-login": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 44,
+      "label": "Back to Friday Fun Home"
+    },
+    "consoleErrors": 0
+  },
+  "360/join-waiting": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/join-select-challenge": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/join-challenge-sent": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/join-incoming-challenges": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/quiz-question": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/quiz-final-result": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/leaderboard-live": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/leaderboard-final": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/admin-overview": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "BUTTON"
+    },
+    "consoleErrors": 0
+  },
+  "360/admin-games": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/admin-participants": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "Share on WhatsApp"
+    },
+    "consoleErrors": 0
+  },
+  "360/admin-monitoring": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/admin-leaderboard": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/admin-topics": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/admin-settings": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/admin-create-game-modal": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "360/admin-confirm-dialog": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/home": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/admin-login": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 44,
+      "label": "Back to Friday Fun Home"
+    },
+    "consoleErrors": 0
+  },
+  "390/join-waiting": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/join-select-challenge": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/join-challenge-sent": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/join-incoming-challenges": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/quiz-question": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/quiz-final-result": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/leaderboard-live": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/leaderboard-final": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/admin-overview": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "BUTTON"
+    },
+    "consoleErrors": 0
+  },
+  "390/admin-games": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/admin-participants": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "Share on WhatsApp"
+    },
+    "consoleErrors": 0
+  },
+  "390/admin-monitoring": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/admin-leaderboard": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/admin-topics": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/admin-settings": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/admin-create-game-modal": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "390/admin-confirm-dialog": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/home": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/admin-login": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 44,
+      "label": "Back to Friday Fun Home"
+    },
+    "consoleErrors": 0
+  },
+  "430/join-waiting": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/join-select-challenge": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/join-challenge-sent": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/join-incoming-challenges": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/quiz-question": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/quiz-final-result": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/leaderboard-live": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/leaderboard-final": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/admin-overview": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "BUTTON"
+    },
+    "consoleErrors": 0
+  },
+  "430/admin-games": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/admin-participants": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "Share on WhatsApp"
+    },
+    "consoleErrors": 0
+  },
+  "430/admin-monitoring": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/admin-leaderboard": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/admin-topics": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/admin-settings": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/admin-create-game-modal": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "430/admin-confirm-dialog": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "FRIDAY FUN\n2026"
+    },
+    "consoleErrors": 0
+  },
+  "768/home": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "768/admin-login": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 44,
+      "label": "Back to Friday Fun Home"
+    },
+    "consoleErrors": 0
+  },
+  "768/join-waiting": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "768/join-select-challenge": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "768/join-challenge-sent": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "768/join-incoming-challenges": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "768/quiz-question": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Go to question 1"
+    },
+    "consoleErrors": 0
+  },
+  "768/quiz-final-result": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "768/leaderboard-live": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "768/leaderboard-final": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "768/admin-overview": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "BUTTON"
+    },
+    "consoleErrors": 0
+  },
+  "768/admin-games": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "768/admin-participants": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "Share on WhatsApp"
+    },
+    "consoleErrors": 0
+  },
+  "768/admin-monitoring": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "768/admin-leaderboard": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "768/admin-topics": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit AI & Technology"
+    },
+    "consoleErrors": 0
+  },
+  "768/admin-settings": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "768/admin-create-game-modal": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "768/admin-confirm-dialog": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "1024/home": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1024/admin-login": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 44,
+      "label": "Back to Friday Fun Home"
+    },
+    "consoleErrors": 0
+  },
+  "1024/join-waiting": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1024/join-select-challenge": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1024/join-challenge-sent": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1024/join-incoming-challenges": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1024/quiz-question": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Go to question 1"
+    },
+    "consoleErrors": 0
+  },
+  "1024/quiz-final-result": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1024/leaderboard-live": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1024/leaderboard-final": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1024/admin-overview": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "BUTTON"
+    },
+    "consoleErrors": 0
+  },
+  "1024/admin-games": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "1024/admin-participants": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "Share on WhatsApp"
+    },
+    "consoleErrors": 0
+  },
+  "1024/admin-monitoring": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "Copy Link"
+    },
+    "consoleErrors": 0
+  },
+  "1024/admin-leaderboard": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1024/admin-topics": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit AI & Technology"
+    },
+    "consoleErrors": 0
+  },
+  "1024/admin-settings": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1024/admin-create-game-modal": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "1024/admin-confirm-dialog": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "1366/home": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1366/admin-login": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 44,
+      "label": "Back to Friday Fun Home"
+    },
+    "consoleErrors": 0
+  },
+  "1366/join-waiting": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1366/join-select-challenge": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1366/join-challenge-sent": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1366/join-incoming-challenges": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1366/quiz-question": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Go to question 1"
+    },
+    "consoleErrors": 0
+  },
+  "1366/quiz-final-result": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1366/leaderboard-live": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1366/leaderboard-final": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1366/admin-overview": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "BUTTON"
+    },
+    "consoleErrors": 0
+  },
+  "1366/admin-games": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "1366/admin-participants": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "Share on WhatsApp"
+    },
+    "consoleErrors": 0
+  },
+  "1366/admin-monitoring": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "Copy Link"
+    },
+    "consoleErrors": 0
+  },
+  "1366/admin-leaderboard": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1366/admin-topics": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit AI & Technology"
+    },
+    "consoleErrors": 0
+  },
+  "1366/admin-settings": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1366/admin-create-game-modal": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "1366/admin-confirm-dialog": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "1440/home": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1440/admin-login": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 44,
+      "label": "Back to Friday Fun Home"
+    },
+    "consoleErrors": 0
+  },
+  "1440/join-waiting": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1440/join-select-challenge": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1440/join-challenge-sent": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1440/join-incoming-challenges": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1440/quiz-question": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Go to question 1"
+    },
+    "consoleErrors": 0
+  },
+  "1440/quiz-final-result": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1440/leaderboard-live": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1440/leaderboard-final": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1440/admin-overview": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "BUTTON"
+    },
+    "consoleErrors": 0
+  },
+  "1440/admin-games": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "1440/admin-participants": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "Share on WhatsApp"
+    },
+    "consoleErrors": 0
+  },
+  "1440/admin-monitoring": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "Copy Link"
+    },
+    "consoleErrors": 0
+  },
+  "1440/admin-leaderboard": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1440/admin-topics": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit AI & Technology"
+    },
+    "consoleErrors": 0
+  },
+  "1440/admin-settings": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1440/admin-create-game-modal": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "1440/admin-confirm-dialog": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "1920/home": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1920/admin-login": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 44,
+      "label": "Back to Friday Fun Home"
+    },
+    "consoleErrors": 0
+  },
+  "1920/join-waiting": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1920/join-select-challenge": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1920/join-challenge-sent": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1920/join-incoming-challenges": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1920/quiz-question": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Go to question 1"
+    },
+    "consoleErrors": 0
+  },
+  "1920/quiz-final-result": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1920/leaderboard-live": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1920/leaderboard-final": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1920/admin-overview": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "BUTTON"
+    },
+    "consoleErrors": 0
+  },
+  "1920/admin-games": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "1920/admin-participants": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "Share on WhatsApp"
+    },
+    "consoleErrors": 0
+  },
+  "1920/admin-monitoring": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 38,
+      "label": "Copy Link"
+    },
+    "consoleErrors": 0
+  },
+  "1920/admin-leaderboard": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1920/admin-topics": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit AI & Technology"
+    },
+    "consoleErrors": 0
+  },
+  "1920/admin-settings": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 43,
+      "label": "FRIDAY FUN\n2026\n\nMultiplayer Quiz Challe"
+    },
+    "consoleErrors": 0
+  },
+  "1920/admin-create-game-modal": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  },
+  "1920/admin-confirm-dialog": {
+    "overflowPx": 0,
+    "clipped": [],
+    "smallestTarget": {
+      "size": 40,
+      "label": "Edit Resp Live"
+    },
+    "consoleErrors": 0
+  }
+}

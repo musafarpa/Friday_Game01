@@ -1153,51 +1153,41 @@ export const QUESTION_BANK: BankQuestion[] = [
 ];
 
 /**
- * Returns a single random question matching topic and optional difficulty,
- * respecting excluded question text to avoid duplicates.
+ * Bank candidates for a topic. Matching is deliberately STRICT: an exact (case-insensitive) name
+ * match, or a containment match for a reasonably long name (e.g. "Cricket" -> "Cricket & Sports").
+ * It NEVER falls back to other topics: a custom topic with no bank entries has NO bank questions,
+ * so a participant can never be served a question that belongs to a different topic.
  */
+export function getBankCandidatesForTopic(topicName: string): BankQuestion[] {
+  const name = topicName.toLowerCase().trim();
+  if (!name) return [];
+  const exact = QUESTION_BANK.filter((q) => q.topic.toLowerCase().trim() === name);
+  if (exact.length > 0) return exact;
+  if (name.length < 4) return [];
+  return QUESTION_BANK.filter((q) => {
+    const bank = q.topic.toLowerCase().trim();
+    return bank.includes(name) || name.includes(bank);
+  });
+}
+
+/** One random bank question for the topic/difficulty, avoiding excluded texts. null if none exist. */
 export function getRandomQuestionForTopic(
   topicName: string,
   difficulty?: 'easy' | 'medium' | 'hard',
   excludeQuestions: string[] = []
-): BankQuestion {
-  const normExclude = excludeQuestions.map((q) => q.toLowerCase().trim());
-
-  let candidates = QUESTION_BANK.filter(
-    (q) => q.topic.toLowerCase().trim() === topicName.toLowerCase().trim()
+): BankQuestion | null {
+  const normExclude = new Set(excludeQuestions.map((q) => q.toLowerCase().trim()));
+  const candidates = getBankCandidatesForTopic(topicName).filter(
+    (q) => !normExclude.has(q.question.toLowerCase().trim())
   );
-
-  if (candidates.length === 0) {
-    candidates = QUESTION_BANK.filter(
-      (q) =>
-        topicName.toLowerCase().includes(q.topic.toLowerCase()) ||
-        q.topic.toLowerCase().includes(topicName.toLowerCase())
-    );
-  }
-
-  if (candidates.length === 0) {
-    candidates = QUESTION_BANK;
-  }
-
-  const unused = candidates.filter((q) => !normExclude.includes(q.question.toLowerCase().trim()));
-  const pool = unused.length > 0 ? unused : candidates;
-
-  if (difficulty) {
-    const diffPool = pool.filter((q) => q.difficulty === difficulty);
-    if (diffPool.length > 0) {
-      return diffPool[Math.floor(Math.random() * diffPool.length)];
-    }
-  }
-
+  const pool = difficulty ? candidates.filter((q) => q.difficulty === difficulty) : candidates;
+  if (pool.length === 0) return null;
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
 /**
- * Returns a curated set of questions (default 7) for a topic matching the required mixed difficulty:
- * - 3 Easy questions
- * - 3 Medium questions
- * - 1 Hard question
- * Strictly guarantees distinct, non-duplicate questions.
+ * Returns up to `count` distinct bank questions following the requested difficulty distribution
+ * (default 3 easy / 3 medium / 1 hard). Never repeats a question and never crosses topics.
  */
 export function getBankQuestionsForTopic(
   topicName: string,
@@ -1205,56 +1195,31 @@ export function getBankQuestionsForTopic(
   distribution: { easy: number; medium: number; hard: number } = { easy: 3, medium: 3, hard: 1 },
   excludeQuestions: string[] = []
 ): BankQuestion[] {
-  const normExclude = new Set(excludeQuestions.map((q) => q.toLowerCase().trim()));
+  const taken = new Set(excludeQuestions.map((q) => q.toLowerCase().trim()));
+  const candidates = getBankCandidatesForTopic(topicName).filter((q) => !taken.has(q.question.toLowerCase().trim()));
   const selected: BankQuestion[] = [];
-  const selectedTexts = new Set<string>();
-
-  // Find candidate pool for topic
-  let candidates = QUESTION_BANK.filter(
-    (q) => q.topic.toLowerCase().trim() === topicName.toLowerCase().trim()
-  );
-  if (candidates.length === 0) {
-    candidates = QUESTION_BANK.filter(
-      (q) =>
-        topicName.toLowerCase().includes(q.topic.toLowerCase()) ||
-        q.topic.toLowerCase().includes(topicName.toLowerCase())
-    );
-  }
-  if (candidates.length === 0) {
-    candidates = QUESTION_BANK;
-  }
-
-  const pickByDiff = (diff: 'easy' | 'medium' | 'hard', targetCount: number) => {
-    const diffCandidates = candidates.filter(
-      (q) =>
-        q.difficulty === diff &&
-        !normExclude.has(q.question.toLowerCase().trim()) &&
-        !selectedTexts.has(q.question.toLowerCase().trim())
-    );
-    for (let i = 0; i < targetCount && i < diffCandidates.length; i++) {
-      selected.push(diffCandidates[i]);
-      selectedTexts.add(diffCandidates[i].question.toLowerCase().trim());
+  const pick = (diff: 'easy' | 'medium' | 'hard', n: number) => {
+    for (const q of candidates) {
+      if (n <= 0) break;
+      const key = q.question.toLowerCase().trim();
+      if (q.difficulty === diff && !taken.has(key)) {
+        selected.push(q);
+        taken.add(key);
+        n--;
+      }
     }
   };
-
-  // 1. Pick required distribution: 3 Easy, 3 Medium, 1 Hard
-  pickByDiff('easy', distribution.easy);
-  pickByDiff('medium', distribution.medium);
-  pickByDiff('hard', distribution.hard);
-
-  // 2. If count still short of requested count, fill with remaining unused candidates
-  if (selected.length < count) {
-    const remaining = candidates.filter(
-      (q) =>
-        !normExclude.has(q.question.toLowerCase().trim()) &&
-        !selectedTexts.has(q.question.toLowerCase().trim())
-    );
-    for (const q of remaining) {
-      if (selected.length >= count) break;
+  pick('easy', distribution.easy);
+  pick('medium', distribution.medium);
+  pick('hard', distribution.hard);
+  // top up with any remaining unused candidates until count is reached
+  for (const q of candidates) {
+    if (selected.length >= count) break;
+    const key = q.question.toLowerCase().trim();
+    if (!taken.has(key)) {
       selected.push(q);
-      selectedTexts.add(q.question.toLowerCase().trim());
+      taken.add(key);
     }
   }
-
-  return selected;
+  return selected.slice(0, count);
 }

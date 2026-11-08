@@ -44,3 +44,9 @@ dist-ssr/
 
 
 supabase/.temp/
+
+# QA artefacts
+dist-e2e/
+test-results/
+playwright-report/
+docs/qa/evidence/playwright-report/

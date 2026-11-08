@@ -1,4 +1,5 @@
 import { getRandomQuestionForTopic, getBankQuestionsForTopic, BankQuestion } from '../data/questionBank';
+import { supabase } from '../lib/supabase';
 
 export interface GeneratedQuestion {
   topic: string;
@@ -13,137 +14,146 @@ export interface GeneratedQuestion {
   source?: string;
 }
 
+/** Pool target per topic: 10 questions (4 easy / 4 medium / 2 hard). The hard minimum is 7 (3/3/1). */
+export const POOL_TARGET = { easy: 4, medium: 4, hard: 2 } as const;
+export const POOL_MINIMUM = { easy: 3, medium: 3, hard: 1 } as const;
+export const POOL_MINIMUM_TOTAL = 7;
+
 export function isValidQuestion(q: GeneratedQuestion | BankQuestion): boolean {
-  if (!q.question || q.question.trim().length < 5) return false;
+  if (!q || !q.question || q.question.trim().length < 10) return false;
   if (!q.option_a || !q.option_b || !q.option_c || !q.option_d) return false;
-  const opts = [
-    q.option_a.trim().toLowerCase(),
-    q.option_b.trim().toLowerCase(),
-    q.option_c.trim().toLowerCase(),
-    q.option_d.trim().toLowerCase(),
-  ];
-  const uniqueOpts = new Set(opts);
-  if (uniqueOpts.size !== 4) return false; // Must be 4 distinct options!
-  if (!['A', 'B', 'C', 'D'].includes(q.correct_option)) return false;
+  const opts = [q.option_a, q.option_b, q.option_c, q.option_d].map((o) => o.trim().toLowerCase());
+  if (opts.some((o) => o.length === 0)) return false;
+  if (new Set(opts).size !== 4) return false; // exactly four DISTINCT options
+  if (!['A', 'B', 'C', 'D'].includes(q.correct_option)) return false; // exactly one correct answer
+  if (!['easy', 'medium', 'hard'].includes(q.difficulty)) return false;
   if (!q.explanation || q.explanation.trim().length === 0) return false;
   return true;
+}
+
+async function authHeader(): Promise<Record<string, string>> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+export interface GenerationAttempt {
+  question: GeneratedQuestion | null;
+  /** Why the AI endpoint produced nothing (so the UI can explain instead of silently degrading). */
+  aiError?: string;
+}
+
+/** Ask the server-side AI endpoint for ONE question. Never throws. */
+async function requestAiQuestion(
+  topicName: string,
+  difficulty: 'easy' | 'medium' | 'hard',
+  excludeQuestions: string[]
+): Promise<GenerationAttempt> {
+  try {
+    const baseUrl = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+    if (!baseUrl.startsWith('http')) return { question: null, aiError: 'No browser origin for API call' };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20_000); // AI timeout => fall back, never hang
+    try {
+      const response = await fetch(`${baseUrl}/api/generate-question`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ topic: topicName, difficulty, excludeQuestions }),
+        signal: controller.signal,
+      });
+      if (!response.ok) return { question: null, aiError: `AI endpoint returned HTTP ${response.status}` };
+      const data = await response.json();
+      if (data?.source === 'none') return { question: null, aiError: data.error || 'No AI provider configured' };
+      const candidate = { ...data, topic: topicName, difficulty } as GeneratedQuestion;
+      return isValidQuestion(candidate) ? { question: candidate } : { question: null, aiError: 'AI returned an invalid question' };
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (err: any) {
+    return { question: null, aiError: err?.name === 'AbortError' ? 'AI request timed out' : err?.message || 'AI unavailable' };
+  }
 }
 
 export async function generateQuestionForTopic(
   topicName: string,
   difficulty: 'easy' | 'medium' | 'hard' = 'medium',
   excludeQuestions: string[] = []
-): Promise<GeneratedQuestion> {
-  try {
-    const baseUrl = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
-    if (baseUrl && baseUrl.startsWith('http')) {
-      const response = await fetch(`${baseUrl}/api/generate-question`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          topic: topicName,
-          difficulty,
-          excludeQuestions,
-        }),
-      });
+): Promise<GenerationAttempt> {
+  const ai = await requestAiQuestion(topicName, difficulty, excludeQuestions);
+  if (ai.question) return ai;
 
-      if (response.ok) {
-        const data = await response.json();
-        if (
-          data.question &&
-          data.option_a &&
-          data.option_b &&
-          data.option_c &&
-          data.option_d &&
-          ['A', 'B', 'C', 'D'].includes(data.correct_option)
-        ) {
-          return data as GeneratedQuestion;
-        }
-      }
-    }
-  } catch (err) {
-    // API unavailable, fallback cleanly
-  }
-
-  // Guaranteed fallback to question bank
+  // Fallback: verified bank. getRandomQuestionForTopic never crosses topics (null if none).
   const fallback = getRandomQuestionForTopic(topicName, difficulty, excludeQuestions);
-  return {
-    ...fallback,
-    source: 'question-bank',
-  };
+  if (fallback) return { question: { ...fallback, source: 'question-bank' }, aiError: ai.aiError };
+  return { question: null, aiError: ai.aiError };
+}
+
+export interface QuestionSetResult {
+  questions: GeneratedQuestion[];
+  /** Human readable reasons for any shortfall (AI errors, exhausted bank). Empty when fully served. */
+  warnings: string[];
 }
 
 /**
- * Generates at least `count` (minimum 7) unique, high-quality questions for a selected topic
- * with the exact required difficulty distribution (3 Easy, 3 Medium, 1 Hard).
- * Guarantees zero duplicate questions within the set and against `excludeQuestions`.
+ * Generates up to `distribution.easy + medium + hard` unique, valid questions for a topic with the
+ * requested difficulty mix. Guarantees: no duplicates within the set or against excludeQuestions,
+ * every question valid (4 distinct options, one correct answer), every question belongs to the topic.
+ * If fewer can be produced, returns what it has plus warnings - the caller decides (we never pad
+ * with questions from another topic).
  */
 export async function generateQuestionSetForTopic(
   topicName: string,
-  count: number = 7,
-  distribution: { easy: number; medium: number; hard: number } = { easy: 3, medium: 3, hard: 1 },
+  distribution: { easy: number; medium: number; hard: number } = { ...POOL_MINIMUM },
   excludeQuestions: string[] = []
-): Promise<GeneratedQuestion[]> {
+): Promise<QuestionSetResult> {
   const result: GeneratedQuestion[] = [];
-  const seenTexts = new Set<string>(excludeQuestions.map((t) => t.toLowerCase().trim()));
+  const warnings = new Set<string>();
+  const seen = new Set<string>(excludeQuestions.map((t) => t.toLowerCase().trim()));
 
-  // Target sequence of difficulties according to distribution:
-  // 3 Easy, 3 Medium, 1 Hard
-  const diffSequence: Array<'easy' | 'medium' | 'hard'> = [];
-  for (let i = 0; i < distribution.easy; i++) diffSequence.push('easy');
-  for (let i = 0; i < distribution.medium; i++) diffSequence.push('medium');
-  for (let i = 0; i < distribution.hard; i++) diffSequence.push('hard');
+  const plan: Array<'easy' | 'medium' | 'hard'> = [
+    ...Array(Math.max(0, distribution.easy)).fill('easy'),
+    ...Array(Math.max(0, distribution.medium)).fill('medium'),
+    ...Array(Math.max(0, distribution.hard)).fill('hard'),
+  ];
 
-  // If count exceeds distribution total, fill with medium
-  while (diffSequence.length < count) {
-    diffSequence.push('medium');
-  }
-
-  // 1. Attempt generation for each target difficulty
-  for (const diff of diffSequence) {
-    try {
-      const generated = await generateQuestionForTopic(
-        topicName,
-        diff,
-        Array.from(seenTexts)
-      );
-      if (isValidQuestion(generated) && !seenTexts.has(generated.question.toLowerCase().trim())) {
-        result.push(generated);
-        seenTexts.add(generated.question.toLowerCase().trim());
-        continue;
-      }
-    } catch {
-      // Fallback
+  for (const diff of plan) {
+    const attempt = await generateQuestionForTopic(topicName, diff, Array.from(seen));
+    if (attempt.aiError) warnings.add(attempt.aiError);
+    const q = attempt.question;
+    if (q && isValidQuestion(q) && !seen.has(q.question.toLowerCase().trim())) {
+      result.push(q);
+      seen.add(q.question.toLowerCase().trim());
     }
   }
 
-  // 2. If short of requested count or missing difficulty distributions, pull from verified question bank
-  if (result.length < count) {
-    const easyNeeded = Math.max(0, distribution.easy - result.filter((q) => q.difficulty === 'easy').length);
-    const medNeeded = Math.max(0, distribution.medium - result.filter((q) => q.difficulty === 'medium').length);
-    const hardNeeded = Math.max(0, distribution.hard - result.filter((q) => q.difficulty === 'hard').length);
+  // Top up from the verified bank for any difficulty still short.
+  const have = (d: string) => result.filter((q) => q.difficulty === d).length;
+  const need = {
+    easy: Math.max(0, distribution.easy - have('easy')),
+    medium: Math.max(0, distribution.medium - have('medium')),
+    hard: Math.max(0, distribution.hard - have('hard')),
+  };
+  if (need.easy + need.medium + need.hard > 0) {
+    const bank = getBankQuestionsForTopic(topicName, need.easy + need.medium + need.hard, need, Array.from(seen));
+    for (const bq of bank) {
+      const key = bq.question.toLowerCase().trim();
+      if (!seen.has(key) && isValidQuestion(bq)) {
+        result.push({ ...bq, source: 'question-bank' });
+        seen.add(key);
+      }
+    }
+  }
 
-    const bankQuestions = getBankQuestionsForTopic(
-      topicName,
-      count - result.length,
-      { easy: easyNeeded, medium: medNeeded, hard: hardNeeded },
-      Array.from(seenTexts)
+  const missing = plan.length - result.length;
+  if (missing > 0) {
+    warnings.add(
+      `Only ${result.length} of ${plan.length} requested questions could be produced for "${topicName}". ` +
+        `Configure an AI key (GEMINI_API_KEY / OPENAI_API_KEY) or add questions manually.`
     );
-
-    for (const bq of bankQuestions) {
-      const norm = bq.question.toLowerCase().trim();
-      if (!seenTexts.has(norm)) {
-        result.push({
-          ...bq,
-          source: 'question-bank',
-        });
-        seenTexts.add(norm);
-      }
-      if (result.length >= count) break;
-    }
   }
-
-  return result;
+  return { questions: result, warnings: Array.from(warnings) };
 }

@@ -32,13 +32,13 @@ export const HomePage: React.FC = () => {
     // Check if user entered a full URL
     try {
       if (trimmed.includes('/join/')) {
-        const parts = trimmed.split('/join/')[1]?.split('/');
+        const parts = trimmed.split('/join/')[1]?.split(/[?#]/)[0].split('/');
         if (parts && parts.length >= 2) {
           navigate(`/join/${parts[0]}/${parts[1]}`);
           return;
         }
       } else if (trimmed.includes('/challenge/')) {
-        const challengeToken = trimmed.split('/challenge/')[1];
+        const challengeToken = trimmed.split('/challenge/')[1]?.split(/[?#/]/)[0];
         if (challengeToken) {
           navigate(`/challenge/${challengeToken}`);
           return;

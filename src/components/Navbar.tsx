@@ -50,7 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({ isAdmin = false, onAdminLogout }
           <nav className="hidden md:flex items-center gap-6">
             <Link
               to="/"
-              className="text-sm font-medium text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
+              className="text-sm font-medium text-slate-300 hover:text-white transition-colors flex items-center gap-1.5 min-h-[44px] px-1"
             >
               <Sparkles className="w-4 h-4 text-purple-400" />
               How It Works
@@ -60,7 +60,7 @@ export const Navbar: React.FC<NavbarProps> = ({ isAdmin = false, onAdminLogout }
               <>
                 <Link
                   to="/admin"
-                  className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1.5"
+                  className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1.5 min-h-[44px] px-1"
                 >
                   <Shield className="w-4 h-4" />
                   Admin Dashboard

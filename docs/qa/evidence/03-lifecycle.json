@@ -1,0 +1,28 @@
+{
+  "game_switch": "roster/links always belong to the selected game",
+  "edit_game": "validated + saved",
+  "pause_resume": "players updated live; answers blocked while paused",
+  "cancel": {
+    "status": "cancelled",
+    "assignments_kept": 1
+  },
+  "delete": {
+    "in_progress_locked": true,
+    "impact_dialog": true,
+    "orphans": 0,
+    "other_game_intact": true
+  },
+  "cleanup": "removed 2 old finished games; 4 other games untouched",
+  "two_tabs": "stale tab got server error: This game is already in progress.",
+  "network_interruption": "clear errors, no partial data, recovered",
+  "ai_down": "game blocked from starting; incomplete topic named",
+  "overview_counts": {
+    "total": 14,
+    "reg": 5,
+    "act": 7,
+    "done": 1,
+    "canc": 1
+  },
+  "overview_updates_without_manual_refresh": true,
+  "overview_buttons": "Test Connection / Live Monitor / View all / Select & view verified"
+}
